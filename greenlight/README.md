@@ -18,12 +18,12 @@ This C++ codebase implements an economic Model Predictive Control (MPC) strategy
 
 ### Controllable Inputs
 The MPC model includes six controllable inputs:
-- `uBoil` (boiler output)
-- `uCo2` (CO2 injection rate)
-- `uThScr` (thermal screen position)
-- `uVent` (ventilation position)
-- `uLamp` (lamp output)
-- `uBlScr` (blackout screen position)
+1. `uBoil` (boiler output)
+2. `uCo2` (CO2 injection rate)
+3. `uThScr` (thermal screen position)
+4. `uVent` (ventilation position)
+5. `uLamp` (lamp output)
+6. `uBlScr` (blackout screen position)
 
 **Note**: Intermediate lamps and grow pipes are excluded from this implementation.
 
@@ -35,6 +35,9 @@ The code supports two versions of the model for state computation:
 **Switching Between Versions:**
 - Modify `ode.hpp` by de-commenting the desired `.hpp` file.
 - Recompile the code to apply changes.
+
+**Model parameters**
+- Model parameters stem from the Bleijswijk 2010 settings, calibrated by [David Katzin](https://github.com/davkat1/GreenLight).
 
 ### Visualization
 - **Script**: `visualise_trajectories.py`
@@ -96,9 +99,10 @@ Run the compiled executable:
 ### Replacing the Solver
 - MUMPS could be considered.
 - Trade-off: MUMPS may increase computation time compared to HSL solvers like `ma57`.
+- Make sure all libraries are linked correctly.
 
 ---
 
 ## Contact
-For questions or further assistance, please contact the maintainer at [GitHub Issues](https://github.com/BartvLaatum).
+For questions or further assistance, please contact the me at [GitHub Issues](https://github.com/BartvLaatum).
 
