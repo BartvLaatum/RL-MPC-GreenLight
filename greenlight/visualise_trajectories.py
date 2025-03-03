@@ -4,41 +4,41 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 ### Latex font in plots
-plt.rcParams['font.serif'] = "cmr10"
-plt.rcParams['font.family'] = "serif"
-plt.rcParams['font.size'] = 24
+plt.rcParams["font.serif"] = "cmr10"
+plt.rcParams["font.family"] = "serif"
+plt.rcParams["font.size"] = 24
 
-plt.rcParams['legend.fontsize'] = 24
-plt.rcParams['legend.loc'] = 'upper right'
-plt.rcParams['axes.labelsize'] = 22
-plt.rcParams['axes.formatter.use_mathtext'] = True
-plt.rcParams['xtick.labelsize'] = 24
-plt.rcParams['ytick.labelsize'] = 24
-plt.rcParams['text.usetex'] = False
-plt.rcParams['mathtext.fontset'] = 'cm'
+plt.rcParams["legend.fontsize"] = 24
+plt.rcParams["legend.loc"] = "upper right"
+plt.rcParams["axes.labelsize"] = 22
+plt.rcParams["axes.formatter.use_mathtext"] = True
+plt.rcParams["xtick.labelsize"] = 24
+plt.rcParams["ytick.labelsize"] = 24
+plt.rcParams["text.usetex"] = False
+plt.rcParams["mathtext.fontset"] = "cm"
 plt.rcParams["axes.grid"] = False
-plt.rcParams['svg.fonttype'] = 'none'
-plt.rcParams['axes.linewidth'] = 4   # Default for all spines
-plt.rcParams['axes.spines.top'] = False
-plt.rcParams['axes.spines.right'] = False
-# plt.rcParams['text.usetex'] = True
-plt.rcParams['lines.linewidth'] = 3
-plt.rcParams['xtick.major.size'] = 4  # Thicker major x-ticks
-plt.rcParams['xtick.major.width'] = 2  # Thicker major x-
-plt.rcParams['ytick.major.size'] = 4  
-plt.rcParams['ytick.major.width'] = 2 
-plt.rc('axes', unicode_minus=False)
+plt.rcParams["svg.fonttype"] = "none"
+plt.rcParams["axes.linewidth"] = 4   # Default for all spines
+plt.rcParams["axes.spines.top"] = False
+plt.rcParams["axes.spines.right"] = False
+# plt.rcParams["text.usetex"] = True
+plt.rcParams["lines.linewidth"] = 3
+plt.rcParams["xtick.major.size"] = 4  # Thicker major x-ticks
+plt.rcParams["xtick.major.width"] = 2  # Thicker major x-
+plt.rcParams["ytick.major.size"] = 4  
+plt.rcParams["ytick.major.width"] = 2 
+plt.rc("axes", unicode_minus=False)
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--month', type=str, default='january', help='Month to visualise')
+    parser.add_argument("--month", type=str, default="january", help="Month to visualise")
     args = parser.parse_args()
     month = args.month
 
     # Load state variable data
-    path = f'data/{month}/'
-    states_diff = pd.read_csv(path + 'states-OL.csv', header=None).T
-    states_non_diff = pd.read_csv(path + 'states-OL-non-diff.csv', header=None).T
+    path = f"data/{month}/"
+    states_diff = pd.read_csv(path + "states-OL.csv", header=None).T
+    states_non_diff = pd.read_csv(path + "states-OL-non-diff.csv", header=None).T
 
     # Select rows for comparison
     cols_to_compare = [0, 2, 15, 25]
@@ -57,21 +57,21 @@ if __name__ == '__main__':
     }
 
     for i, row in enumerate(cols_to_compare):
-        axes[i].plot(time_steps, states_diff_selected.loc[row], label="Diff", linestyle='--')
-        axes[i].plot(time_steps, states_non_diff_selected.loc[row], label="Diff", linestyle='--')
-        axes[i].set_ylabel(state_labels_with_units.get(row, f'State {row}'))
+        axes[i].plot(time_steps, states_diff_selected.loc[row], label="Diff", linestyle="--")
+        axes[i].plot(time_steps, states_non_diff_selected.loc[row], label="Diff", linestyle="--")
+        axes[i].set_ylabel(state_labels_with_units.get(row, f"State {row}"))
         axes[i].grid(True)
 
-    axes[-1].set_xlabel('Time Steps')
-    # fig.suptitle('Comparison of Selected State Variables over Time')
-    fig.legend(["Diff", "Non diff"], loc='upper center', ncol=2, bbox_to_anchor=(0.5, 0.98))
+    axes[-1].set_xlabel("Time Steps")
+    # fig.suptitle("Comparison of Selected State Variables over Time")
+    fig.legend(["Diff", "Non diff"], loc="upper center", ncol=2, bbox_to_anchor=(0.5, 0.98))
 
     plt.tight_layout(rect=[0, 0, 1, 0.95])
-    fig.savefig(f'figures/{month}/states.png')
+    fig.savefig(f"figures/{month}/states.png")
 
     # Load control input data
-    control_inputs = pd.read_csv(path + 'controls-OL.csv', header=None)
-    control_inputs_non_diff = pd.read_csv(path + 'controls-OL-non-diff.csv', header=None)
+    control_inputs = pd.read_csv(path + "controls-OL.csv", header=None)
+    control_inputs_non_diff = pd.read_csv(path + "controls-OL-non-diff.csv", header=None)
 
     control_labels_with_units = {
         0: r"$u_{heat}$ (kW)",
@@ -93,18 +93,18 @@ if __name__ == '__main__':
         axes[i].grid(True)
         axes[i].set_ylim(0, 1)  # Normalise control inputs
 
-    fig.legend(["Diff", "Non diff"], loc='upper center', ncol=2, bbox_to_anchor=(0.5, 0.98))
+    fig.legend(["Diff", "Non diff"], loc="upper center", ncol=2, bbox_to_anchor=(0.5, 0.98))
 
 
-    axes[-1].set_xlabel('Time Steps')
-    # fig.suptitle('Control inputs over time')
+    axes[-1].set_xlabel("Time Steps")
+    # fig.suptitle("Control inputs over time")
 
     plt.tight_layout(rect=[0, 0, 1, 0.95])
-    fig.savefig(f'figures/{month}/controls.png')
+    fig.savefig(f"figures/{month}/controls.png")
 
 
     # Load weather data
-    weather_data = pd.read_csv(path + 'weather.csv', header=None)
+    weather_data = pd.read_csv(path + "weather.csv", header=None)
 
     updated_weather_labels = {
         0: "iGlob",
@@ -125,8 +125,8 @@ if __name__ == '__main__':
         axes[i].set_ylabel(label)
         axes[i].grid(True)
 
-    axes[-1].set_xlabel('Time Steps')
-    # fig.suptitle('Weather Variables Over Time')
+    axes[-1].set_xlabel("Time Steps")
+    # fig.suptitle("Weather Variables Over Time")
 
     plt.tight_layout(rect=[0, 0, 1, 0.95])
-    fig.savefig(f'figures/{month}/weahter_inputs.png')
+    fig.savefig(f"figures/{month}/weahter_inputs.png")

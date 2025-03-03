@@ -104,12 +104,10 @@ inline SX airMc(const SX& f12, const SX& c1, const SX& c2) {
     return sqrt(sq(f12) + 1e-6) * (c1 - c2);
 }
 
-
 // Update function for auxiliary variables
 SX update(const SX& x, const SX& u, const SX& d, const SX& p) {
     std::vector<SX> a(240);
     SX k = 10; // You can adjust this value based on your needs
-
 
     a[0] = 1 - u(2) * (1 - p(80));
     a[1] = u(2) * p(77);
@@ -399,9 +397,6 @@ SX update(const SX& x, const SX& u, const SX& d, const SX& p) {
     // Ventilation rate through sidewall only
     a[134] = a[130] * a[126] * d(4) / (2*p(46)) * sqrt(a[131]);
 
-
-
-
     // Define expr_true and expr_false
     SX expr_true_135 = p(205) * p(60);
     SX expr_false_135 = p(60) * d(4);
@@ -410,14 +405,6 @@ SX update(const SX& x, const SX& u, const SX& d, const SX& p) {
     // a[135] = if_else(d(4) < p(205), p(205) * p(60), p(60) * d(4));
     // Compute the smooth approximation
     a[135] = smooth_if_else(p(205) - d(4), expr_true_135, expr_false_135, k);
-
-    // // Total ventilation through the roof
-    // a[136] = if_else(
-    //             a[127] >= p(8),
-    //             p(57) * a[132] + p(204) * a[135],
-    //             p(57) * ((u(2) + u(5)) / 2 + (u(2) - u(5)) / 2 * tanh(k * (u(2) - u(5))) * a[132] + (1 - (u(2) + u(5)) / 2 + (u(2) - u(5)) / 2 * tanh(k * (u(2) - u(5)))) * a[133] * a[127]) + p(204) * a[135]
-    //         );
-
 
     // // Precompute common terms
     SX delta_136_137 = a[127] - p(8);
@@ -435,11 +422,6 @@ SX update(const SX& x, const SX& u, const SX& d, const SX& p) {
     a[136] = smooth_if_else(delta_136_137, expr_true_136, expr_false_136, 50);
     
     // // Total ventilation through side vents
-    // a[137] = if_else(
-    //             a[127] >= p(8),
-    //             p(57) * a[134] + (1 - p(204)) * a[135],
-    //             p(57) * ((u(2) + u(5)) / 2 + (u(2) - u(5)) / 2 * tanh(k * (u(2) - u(5))) * a[134] + (1 - (u(2) + u(5)) / 2 + (u(2) - u(5)) / 2 * tanh(k * (u(2) - u(5)))) * a[133] * a[129]) + (1 - p(204)) * a[135]
-    //         );
 
     // Second Expression
     SX expr_true_137 = p(57) * a[134] + (1 - p(204)) * a[135];
@@ -469,11 +451,9 @@ SX update(const SX& x, const SX& u, const SX& d, const SX& p) {
     a[143] = u(5) * p(94) * pow(sqrt(sq(x(2) - x(3)) + 1e-6), 0.66) + \
         ((1. - u(5)) / a[141]) * sqrt(0.5 * a[141] * (1. - u(5)) * p(26) * sqrt(sq(a[140] - a[139])) + 1e-6);
 
-
     // Air flux through the screens [m s^{-1}]
     // a[144] = fmin(a[142], a[143]);
     a[144] = (a[142] + a[143]) / 2 - (a[142] - a[143]) / 2 * tanh(k * (a[142] - a[143]));
-
 
     //////////////////////////////////////////////////////////
     //// Convective and conductive heat fluxes [W m^{-2}] ////
@@ -484,13 +464,6 @@ SX update(const SX& x, const SX& u, const SX& d, const SX& p) {
 
     // Between canopy and air in main compartment [W m^{-2}]
     a[146] = sensible(2 * p(0) * a[31], x(4), x(2));
-
-    // Between air in main compartment and floor [W m^{-2}]
-    // a[147] = if_else(
-    //             x(8) > x(2), 
-    //             sensible(1.7 * pow(sqrt(sq(x(8) - x(2)) + 1e-6), 1./3.), x(2), x(8)),
-    //             sensible(1.3 * pow(sqrt(sq(x(2) - x(8)) + 1e-6), 1./4.), x(2), x(8))
-    //         );
 
 
     // Compute the smooth absolute difference

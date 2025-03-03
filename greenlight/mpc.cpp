@@ -29,12 +29,6 @@ int main() {
     SX input_args_sym = SX::vertcat({u, d, p});
 
     Dict int_opts;
-    // Dict jit_options;
-    
-    // JIT options only for the integrator
-    // jit_options["flags"] = "-Ofast -march=native";
-
-    // int_opts["compiler"] = "shell";
     int_opts["abstol"] = 1e-6;
     int_opts["reltol"] = 1e-6;
 
