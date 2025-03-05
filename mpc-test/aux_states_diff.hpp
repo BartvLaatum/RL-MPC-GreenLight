@@ -54,12 +54,20 @@ inline SX fir(const SX& a1, const SX& eps1, const SX& eps2, const SX& f12, const
 inline SX sensible(const SX& hec, const SX& t1, const SX& t2) {
     // Sensible heat flux from 1 to 2 [W m^{-2}]
     // Equation 38 [1]
-    return fabs(hec) * (t1 - t2);
+    return sqrt(sq(hec) + 1e-6) * (t1 - t2);
+    // return fabs(hec) * (t1 - t2);
 }
 
 inline SX cond(const SX& hec, const SX& vp1, const SX& vp2) {
     const double a = 6.4e-9; 
     return 1.0 / (1.0 + exp(-0.1 * (vp1 - vp2))) * a * hec * (vp1 - vp2);
+}
+
+
+SX smooth_if_else(const SX& condition, const SX& expr_true, const SX& expr_false, SX k = 10) {
+    // Smooth transition using tanh
+    SX transition = 0.5 + 0.5 * tanh(k * condition);
+    return expr_false + (expr_true - expr_false) * transition;
 }
 
 // inline SX smoothHar(const SX& processVar, const SX& cutOff, double smooth, double maxRate) {
@@ -84,20 +92,24 @@ inline SX airMv(const SX& f12, const SX& vp1, const SX& vp2, const SX& t1, const
     // Equation 44 [1]
     const float c2k = 273.15;
     const double a = 0.002165;
-    return a * fabs(f12) * (vp1 / (t1 + c2k) - vp2 / (t2 + c2k));
+    // return a * fabs(f12) * (vp1 / (t1 + c2k) - vp2 / (t2 + c2k));
+    return a * sqrt(sq(f12) + 1e-6) * (vp1 / (t1 + c2k) - vp2 / (t2 + c2k));
 }
 
 
 inline SX airMc(const SX& f12, const SX& c1, const SX& c2) {
     // Co2 flux accompanying an air flux [kg m^{-2} s^{-1}]
     // Equation 45 [1]
-    return fabs(f12) * (c1 - c2);
+    // return fabs(f12) * (c1 - c2);
+    return sqrt(sq(f12) + 1e-6) * (c1 - c2);
 }
 
 
 // Update function for auxiliary variables
 SX update(const SX& x, const SX& u, const SX& d, const SX& p) {
     std::vector<SX> a(240);
+    SX k = 10; // You can adjust this value based on your needs
+
 
     a[0] = 1 - u(2) * (1 - p(80));
     a[1] = u(2) * p(77);
@@ -150,7 +162,7 @@ SX update(const SX& x, const SX& u, const SX& d, const SX& p) {
     // Global, PAR, and NIR heat fluxes
     a[37] = p(172) * u(4);                      // qLampIn;         p.thetaLampMax * u[4];
     // a[38] = p(196) * u(5);
-    a[38] = 0;
+    a[38] = p(196) * 0; // we have don't use the interlight in this model
     a[39] = (1 - p(44)) * a[20] * p(6) * d(0);  // rParGhSun
     a[40] = p(174) * a[37];                     // rParGhLamp;      p.etaLampPar * a.qLampIn;
     a[41] = p(192) * a[38];
@@ -372,15 +384,15 @@ SX update(const SX& x, const SX& u, const SX& d, const SX& p) {
     a[131] = p(61);
 
     a[132] = u(3) * p(55) * a[130] / (2. * p(46)) *
-                   sqrt(fabs(p(26) * p(56) * (x(2) - d(1) + 1e-6) / (2. * (0.5 * x(2) + 0.5 * d(1) + 273.15)) + a[131] * (d(4) * d(4))));
+                   sqrt(sqrt(sq(p(26) * p(56) * (x(2) - d(1) + 1e-6) / (2. * (0.5 * x(2) + 0.5 * d(1) + 273.15)) + a[131] * (d(4) * d(4)))));
 
     // a[136]2Max = p(55) * a[130]/(2*p(46)) * 
     //      sqrt(fabs(p(26)*p(56) * (x[()-d[()) / (2*(0.5*x(2) + 0.5*d(1) + 273.15)) + pow(a[131]*d(4), 2)));
     // a[136]2Min = 0;
 
-
+    SX s = a[123] * a[123] + a[126] * a[126];
     a[133] = a[130] / p(46) * sqrt(1e-6 +
-                           pow((a[123] * a[126] / sqrt(fmax(a[123] * a[123] + a[126] * a[126], 0.01))), 2) *
+                           pow((a[123] * a[126] / sqrt((s + 0.01) / 2 + (s - 0.01) / 2 * tanh(k * (s - 0.01)))), 2) *
                            (2 * p(26) * p(62) * (x(2) - d(1) + 1e-6) / (0.5 * x(2) + 0.5 * d(1) + 273.15)) +
                            ((a[123] + a[126] / 2.) * (a[123] + a[126] / 2.) * a[131] * d(4) * d(4)));
     
@@ -389,24 +401,55 @@ SX update(const SX& x, const SX& u, const SX& d, const SX& p) {
 
 
 
+
+    // Define expr_true and expr_false
+    SX expr_true_135 = p(205) * p(60);
+    SX expr_false_135 = p(60) * d(4);
+
     // Leakage ventilation
-    a[135] = if_else(d(4) < p(205), p(205) * p(60), p(60) * d(4));
+    // a[135] = if_else(d(4) < p(205), p(205) * p(60), p(60) * d(4));
+    // Compute the smooth approximation
+    a[135] = smooth_if_else(p(205) - d(4), expr_true_135, expr_false_135, k);
 
-    // Total ventilation through the roof
-    a[136] = if_else(
-                a[127] >= p(8),
-                p(57) * a[132] + p(204) * a[135],
-                p(57) * (fmax(u(2), u(5)) * a[132] + (1 - fmax(u(2), u(5))) * a[133] * a[127]) + p(204) * a[135]
-            );
+    // // Total ventilation through the roof
+    // a[136] = if_else(
+    //             a[127] >= p(8),
+    //             p(57) * a[132] + p(204) * a[135],
+    //             p(57) * ((u(2) + u(5)) / 2 + (u(2) - u(5)) / 2 * tanh(k * (u(2) - u(5))) * a[132] + (1 - (u(2) + u(5)) / 2 + (u(2) - u(5)) / 2 * tanh(k * (u(2) - u(5)))) * a[133] * a[127]) + p(204) * a[135]
+    //         );
 
+
+    // // Precompute common terms
+    SX delta_136_137 = a[127] - p(8);
+    SX u_sum = (u(2) + u(5)) / 2;
+    SX u_diff_tanh = (u(2) - u(5)) / 2 * tanh(k * (u(2) - u(5)));
+
+    // First Expression
+    SX expr_true_136 = p(57) * a[132] + p(204) * a[135];
+
+    SX expr_false_136 = p(57) * (
+        u_sum + u_diff_tanh * a[132]
+        + (1 - u_sum + u_diff_tanh) * a[133] * a[127]
+    ) + p(204) * a[135];
+
+    a[136] = smooth_if_else(delta_136_137, expr_true_136, expr_false_136, 50);
     
-    // Total ventilation through side vents
-    a[137] = if_else(
-                a[127] >= p(8),
-                p(57) * a[134] + (1 - p(204)) * a[135],
-                p(57) * (fmax(u(2), u(5)) * a[134] + (1 - fmax(u(2), u(5))) * a[133] * a[129]) + (1 - p(204)) * a[135]
-            );
+    // // Total ventilation through side vents
+    // a[137] = if_else(
+    //             a[127] >= p(8),
+    //             p(57) * a[134] + (1 - p(204)) * a[135],
+    //             p(57) * ((u(2) + u(5)) / 2 + (u(2) - u(5)) / 2 * tanh(k * (u(2) - u(5))) * a[134] + (1 - (u(2) + u(5)) / 2 + (u(2) - u(5)) / 2 * tanh(k * (u(2) - u(5)))) * a[133] * a[129]) + (1 - p(204)) * a[135]
+    //         );
 
+    // Second Expression
+    SX expr_true_137 = p(57) * a[134] + (1 - p(204)) * a[135];
+
+    SX expr_false_137 = p(57) * (
+        u_sum + u_diff_tanh * a[134]
+        + (1 - u_sum + u_diff_tanh) * a[133] * a[129]
+    ) + (1 - p(204)) * a[135];
+
+    a[137] = smooth_if_else(delta_136_137, expr_true_137, expr_false_137, 50);
 
     // CO2 concentration in main compartment [ppm]
     a[138] = co2dens2ppm(x(2), 1e-6*x(0));
@@ -419,16 +462,18 @@ SX update(const SX& x, const SX& u, const SX& d, const SX& p) {
     a[141] = 0.5 * (a[139] + a[140]);
 
     // Air flux through the thermal screen [m s^{-1}]
-    a[142] = u(2) * p(84) * pow(fabs(x(2) - x(3) + 1e-6), 0.66) + \
-        ((1. - u(2)) / a[141]) * sqrt(0.5 * a[141] * (1. - u(2)) * p(26) * fabs(a[140] - a[139]) + 1e-6);
+    a[142] = u(2) * p(84) * pow(sqrt(sq(x(2) - x(3)) + 1e-6), 0.66) + \
+        ((1. - u(2)) / a[141]) * sqrt(0.5 * a[141] * (1. - u(2)) * p(26) * sqrt(sq(a[140] - a[139])) + 1e-6);
 
     // Air flux through the blackout screen [m s^{-1}]
-    a[143] = u(5) * p(94) * pow(fabs(x(2) - x(3) + 1e-6), 0.66) + \
-        ((1. - u(5)) / a[141]) * sqrt(0.5 * a[141] * (1. - u(5)) * p(26) * fabs(a[140] - a[139]) + 1e-6);
+    a[143] = u(5) * p(94) * pow(sqrt(sq(x(2) - x(3)) + 1e-6), 0.66) + \
+        ((1. - u(5)) / a[141]) * sqrt(0.5 * a[141] * (1. - u(5)) * p(26) * sqrt(sq(a[140] - a[139])) + 1e-6);
 
 
     // Air flux through the screens [m s^{-1}]
-    a[144] = fmin(a[142], a[143]);
+    // a[144] = fmin(a[142], a[143]);
+    a[144] = (a[142] + a[143]) / 2 - (a[142] - a[143]) / 2 * tanh(k * (a[142] - a[143]));
+
 
     //////////////////////////////////////////////////////////
     //// Convective and conductive heat fluxes [W m^{-2}] ////
@@ -441,18 +486,39 @@ SX update(const SX& x, const SX& u, const SX& d, const SX& p) {
     a[146] = sensible(2 * p(0) * a[31], x(4), x(2));
 
     // Between air in main compartment and floor [W m^{-2}]
-    a[147] = if_else(
-                x(8) > x(2), 
-                sensible(1.7 * pow(fabs(x(8) - x(2) + 1e-6), 1./3.), x(2), x(8)),
-                sensible(1.3 * pow(fabs(x(2) - x(8) + 1e-6), 1./4.), x(2), x(8))
-            );
-    
+    // a[147] = if_else(
+    //             x(8) > x(2), 
+    //             sensible(1.7 * pow(sqrt(sq(x(8) - x(2)) + 1e-6), 1./3.), x(2), x(8)),
+    //             sensible(1.3 * pow(sqrt(sq(x(2) - x(8)) + 1e-6), 1./4.), x(2), x(8))
+    //         );
+
+
+    // Compute the smooth absolute difference
+    SX abs_delta_smooth = sqrt(sq(x(8) - x(2)) + p(207));
+
+    // Compute expr_true
+    SX expr_true = sensible(
+        1.7 * pow(abs_delta_smooth, 1.0 / 3.0),
+        x(2),
+        x(8)
+    );
+
+    // Compute expr_false
+    SX expr_false = sensible(
+        1.3 * pow(abs_delta_smooth, 1.0 / 4.0),
+        x(2),
+        x(8)
+    );
+
+    // Compute the smooth approximation
+    a[147] = smooth_if_else(x(8) - x(2), expr_true, expr_false, k);
+
 
     // Between air in main compartment and thermal screen [W m^{-2}]
-    a[148] = sensible(1.7 * u(2) * pow(fabs(x(2) - x(7) + 1e-6), 1.0/3.), x(2), x(7));
+    a[148] = sensible(1.7 * u(2) * pow(sqrt(sq(x(2) - x(7)) + 1e-6), 1.0/3.), x(2), x(7));
 
     // Between air in main compartment and blackout screen [W m^{-2}]
-    a[149] = sensible(1.7 * u(5) * pow(fabs(x(2) - x(20) + 1e-6), 1./3.), x(2), x(20));
+    a[149] = sensible(1.7 * u(5) * pow(sqrt(sq(x(2) - x(20)) + 1e-6), 1./3.), x(2), x(20));
 
     // Between air in main compartment and outside air [W m^{-2}]
     a[150] = sensible(p(111) * p(23) * (a[137] + a[145]), x(2), d(1));
@@ -461,13 +527,13 @@ SX update(const SX& x, const SX& u, const SX& d, const SX& p) {
     a[151] = sensible(p(111) * p(23) * a[144], x(2), x(3));
 
     // Between thermal screen and top compartment [W m^{-2}]
-    a[152] = sensible(1.7 * u(2) * pow(fabs(x(7) - x(3) + 1e-6), 1./3.), x(7), x(3));
+    a[152] = sensible(1.7 * u(2) * pow(sqrt(sq(x(7) - x(3)) + 1e-6), 1./3.), x(7), x(3));
 
     // Between blackout screen and top compartment [W m^{-2}]
-    a[153] = sensible(1.7 * u(5) * pow(fabs(x(20) - x(3) + 1e-6), 1./3.), x(20), x(3));
+    a[153] = sensible(1.7 * u(5) * pow(sqrt(sq(x(20) - x(3)) + 1e-6), 1./3.), x(20), x(3));
 
     // Between top compartment and cover [W m^{-2}]
-    a[154] = sensible(p(50) * pow(fabs(x(3) - x(5) + 1e-6), 1./3.) * p(47) / p(46), x(3), x(5));
+    a[154] = sensible(p(50) * pow(sqrt(sq(x(3) - x(5)) + 1e-6), 1./3.) * p(47) / p(46), x(3), x(5));
 
     // Between top compartment and outside air [W m^{-2}]
     a[155] = sensible(p(111) * p(23) * a[136], x(3), d(1));
@@ -476,7 +542,7 @@ SX update(const SX& x, const SX& u, const SX& d, const SX& p) {
     a[156] = sensible(p(47) / p(46) * (p(51) + p(52) * pow(d(4), p(53))), x(6), d(1));
 
     // Between pipes and air in main compartment [W m^{-2}]
-    a[157] = sensible(1.99 * M_PI * p(105) * p(107) * pow(fabs(x(9) - x(2) + 1e-6), 0.32), x(9), x(2));
+    a[157] = sensible(1.99 * M_PI * p(105) * p(107) * pow(sqrt(sq(x(9) - x(2)) + 1e-6), 0.32), x(9), x(2));
 
     // Between floor and soil layer 1 [W m^{-2}]
     a[158] = sensible(2. / (p(101) / p(99) + p(27) / p(103)), x(8), x(10));
@@ -504,7 +570,8 @@ SX update(const SX& x, const SX& u, const SX& d, const SX& p) {
     a[165] = sensible(p(185), x(17), x(2));
 
     // Between grow pipes and air in main compartment [W m^{-2}]
-    a[166] = sensible(1.99 * M_PI * p(167) * p(166) * pow(fabs(x(19) - x(2) + 1e-6), 0.32), x(19), x(2));
+    a[166] = sensible(1.99 * M_PI * p(167) * p(166) * pow(sqrt(sq(x(19) - x(2)) + 1e-6), 0.32), x(19), x(2));
+    // a[166] = sensible(1.99 * M_PI * p(167) * p(166) * pow(fabs(x(19) - x(2) + 1e-6), 0.32), x(19), x(2));
 
     // Between interlights and air in main compartment [W m^{-2}]
     a[167] = sensible(p(198), x(18), x(2));
@@ -526,13 +593,17 @@ SX update(const SX& x, const SX& u, const SX& d, const SX& p) {
 
     // CO2 influence on stomatal resistance [-]
     // Equation 49 [1]
-    a[172] = fmin(1.5, 1. + a[169] * pow((p(7) * x(0) - 200), 2));
+    // a[172] = fmin(1.5, 1. + a[169] * pow((p(7) * x(0) - 200), 2));
+    SX a_172_max = 1. + a[169] * pow((p(7) * x(0) - 200), 2);
+    a[172] = (1.5 + a_172_max) / 2 - (1.5 - a_172_max)/2*tanh(k*(1.5-a_172_max)); ;
     // Alternatively, you could use a[138] instead of p.etaMgPpm * x(0)
+    // a[144] = (a[142] + a[143]) / 2 - (a[142] - a[143]) / 2 * tanh(k * (a[142] - a[143]));
 
     // Vapor pressure influence on stomatal resistance [-]
     // Equation 49 [1]
-    a[173] = fmin(5.8, 1. + a[170] * pow((satVP(x(4)) - x(15)), 2));
-
+    // a[173] = fmin(5.8, 1. + a[170] * pow((satVP(x(4)) - x(15)), 2));
+    SX a_173_max = 1. + a[170] * pow((satVP(x(4)) - x(15)), 2);
+    a[173] = (5.8 + a_173_max) / 2 - (5.8 - a_173_max)/2*tanh(k*(5.8-a_173_max));
     // Stomatal resistance [s m^{-1}]
     // Equation 48 [1]
     a[174] = p(42) * a[171] * a[172] * a[173];
@@ -557,17 +628,22 @@ SX update(const SX& x, const SX& u, const SX& d, const SX& p) {
 
     // Condensation from main compartment on thermal screen [kg m^{-2} s^{-1}]
     // Table 4 [1], Equation 42 [1]
-    a[181] = cond(1.7 * u(2) * pow(fabs(x(2) - x(7) + 1e-6), (1./3.)), x(15), satVP(x(7)));
+    a[181] = cond(1.7 * u(2) * pow(sqrt(sq(x(2) - x(7)) + 1e-6), (1./3.)), x(15), satVP(x(7)));
+    // a[181] = cond(1.7 * u(2) * pow(fabs(x(2) - x(7) + 1e-6), (1./3.)), x(15), satVP(x(7)));
 
     // Condensation from main compartment on blackout screen [kg m^{-2} s^{-1}]
     // Equatio A39 [5], Equation 7.39 [7]
-    a[182] = cond(1.7 * u(5) * pow(fabs(x(2) - x(20) + 1e-6), (1./3.)), \
+    a[182] = cond(1.7 * u(5) * pow(sqrt(sq(x(2) - x(20)) + 1e-6), (1./3.)), \
         x(15), satVP(x(20)));
+    // a[182] = cond(1.7 * u(5) * pow(fabs(x(2) - x(20) + 1e-6), (1./3.)), \
+    //     x(15), satVP(x(20)));
 
     // Condensation from top compartment to cover [kg m^{-2} s^{-1}]
     // Table 4 [1]
-    a[183] = cond(p(50)* pow(fabs(x(3) - x(5) + 1e-6), (1./3.)) * p(47)/p(46),\
+    a[183] = cond(p(50)* pow(sqrt(sq(x(3) - x(5))+ 1e-6), (1./3.)) * p(47)/p(46),\
         x(16), satVP(x(5)));
+    // a[183] = cond(p(50)* pow(fabs(x(3) - x(5) + 1e-6), (1./3.)) * p(47)/p(46),\
+    //     x(16), satVP(x(5)));
 
     // Vapor flux from main to top compartment [kg m^{-2} s^{-1}]
     a[184] = airMv(a[144], x(15), x(16), x(2), x(3));

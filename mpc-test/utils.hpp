@@ -78,12 +78,73 @@ DM init_state(const std::vector<double>& d0, float rhMax, double time_in_days)
     state(20) = state(2);   // tBlScr
     state(21) = state(4);   // tCan24
     state(22) = 1000.;      // cBuf
-    state(23) = 26000.;     // cLeaf
-    state(24) = 18000.;     // cStem
-    state(25) = 0.;         // cFruit
-    state(26) = 0.;         // tCanSum
+    state(23) = 9.5283e4;     // cLeaf
+    state(24) = 2.5107e5;     // cStem
+    state(25) = 5.5338e4;      // cFruit
+    state(26) = 3.0978e3;         // tCanSum
     state(27) = time_in_days; // time
     return state;
 }
+
+// Function to load dummy weather data from a text file
+std::vector<std::vector<double>> load_weather_dummy(int N) {
+    std::vector<std::vector<double>> weather_data;
+    std::ifstream file("weather.csv");
+
+    if (!file.is_open()) {
+        std::cerr << "Error opening weather data file" << std::endl;
+        return weather_data;
+    }
+
+    std::string line;
+    while (std::getline(file, line) && weather_data.size() < N) {
+        std::vector<double> data_row;
+        std::stringstream ss(line);
+        double value;
+
+        while (ss >> value) {
+            data_row.push_back(value);
+            if (ss.peek() == ',') {
+                ss.ignore();
+            }
+        }
+
+        weather_data.push_back(data_row);
+    }
+
+    file.close();
+    return weather_data;
+}
+
+// Function to load dummy weather data from a text file
+std::vector<std::vector<double>> load_dummy_controls(int N) {
+    std::vector<std::vector<double>> controls;
+    std::ifstream file("data/januari/optimal_controls-non-diff.csv");
+
+    if (!file.is_open()) {
+        std::cerr << "Error opening weather data file" << std::endl;
+        return controls;
+    }
+
+    std::string line;
+    while (std::getline(file, line) && controls.size() < N) {
+        std::vector<double> data_row;
+        std::stringstream ss(line);
+        double value;
+
+        while (ss >> value) {
+            data_row.push_back(value);
+            if (ss.peek() == ',') {
+                ss.ignore();
+            }
+        }
+
+        controls.push_back(data_row);
+    }
+
+    file.close();
+    return controls;
+}
+
 
 #endif  // UTILS_HPP

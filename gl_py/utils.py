@@ -1,6 +1,7 @@
-from typing import Tuple, SupportsFloat
+import argparse
 from os.path import join
 from copy import deepcopy
+from typing import Tuple, SupportsFloat
 from datetime import datetime, timedelta
 
 import numpy as np
@@ -9,16 +10,16 @@ import pandas as pd
 from scipy.interpolate import PchipInterpolator
 
 def load_weather_data(
-                        weatherDataDir: str,
-                        location: str,
-                        source: str,
-                        growthYear: int,
-                        startDay: int,
-                        nDays: int,
-                        predHorizon: int,
-                        h: float,
-                        nd: int
-                    ) -> np.ndarray:
+    weatherDataDir: str,
+    location: str,
+    source: str,
+    growthYear: int,
+    startDay: int,
+    n_days: int,
+    predHorizon: int,
+    h: float,
+    nd: int
+) -> np.ndarray:
     """
     Loads in rawweather data from matlab file and converts it to values GreenLight model uses in numpy array.
     If the solver requires data on a higher frequency we interpolate between available weather data.
@@ -28,7 +29,7 @@ def load_weather_data(
     Args:
         weatherDataDir  - path to raw weather data
         startDay        - at which day of the year do we start the simulation
-        nDays           - how many days do we simulate forward in time
+        n_days           - how many days do we simulate forward in time
         Np              - prediction horizon [days]
         h               - sample time of the solver
         nd              - number of weather variables
@@ -55,7 +56,7 @@ def load_weather_data(
     time = rawWeather["time"].values    # time since start of the year in [s]
     dt = np.mean(np.diff(time-time[0])) # sample period of data [s]
     N0 = int(np.ceil(startDay*c/dt))    # Start index
-    Ns = int(np.ceil(nDays*c/dt))       # Number of samples we need from regular data
+    Ns = int(np.ceil(n_days*c/dt))       # Number of samples we need from regular data
     Np = int(np.ceil(predHorizon*c/dt))+1 # Number of samples into the future we need from regular data
 
     # check whether we exceed data length and we are in the final season
@@ -72,8 +73,8 @@ def load_weather_data(
     weatherData[:,4] = rawWeather["wind speed"][N0:N0+Ns+Np]                    # wind
     weatherData[:,5] = rawWeather["sky temperature"][N0:N0+Ns+Np]               # tSky
     weatherData[:,6] = soilTempNl(rawWeather["time"][N0:N0+Ns+Np])              # tSoOut
-    weatherData[:, 7] = dailLightSum(time, weatherData[:,0], c)                 # daily sun radiation sum [MJ m^{-2} day^{-1}]
-    weatherData[:, 8], weatherData[:,9] = computeisDay(weatherData[:, 0], dt)   # isDay, isDaySmooth
+    # weatherData[:, 7] = dailLightSum(time, weatherData[:,0], c)                 # daily sun radiation sum [MJ m^{-2} day^{-1}]
+    # weatherData[:, 8], weatherData[:,9] = computeisDay(weatherData[:, 0], dt)   # isDay, isDaySmooth
 
     # number of samples required for the solver
     ns = int((dt/h) * (Ns+Np))
@@ -117,19 +118,19 @@ def expandWeatherData(
     rawWeather = pd.concat([rawWeather, newRawWeather.iloc[:, :]])
     return rawWeather
 
-def days2date(timeInDays: float, referenceDate: str):
+def days2date(timeIn_days: float, referenceDate: str):
     """
     Function that converts the number of days since a reference date
     to a date in the format DD-MM-YYYY.
     Args:
-        timeInDays      - number of days since reference date
+        timeIn_days      - number of days since reference date
         referenceDate   - reference date in format DD-MM-YYYY
     Returns:
         targetDatetime  - current date in format DD-MM-YYYY
     """
     referenceDatetime = datetime.strptime(referenceDate, '%d-%m-%Y')
-    int_days = np.floor(timeInDays).astype(int)
-    time_component = (timeInDays - int_days) * 24           # Convert decimal part to hours
+    int_days = np.floor(timeIn_days).astype(int)
+    time_component = (timeIn_days - int_days) * 24           # Convert decimal part to hours
     hours = time_component.astype(int)
     time_component = (time_component - hours) * 60          # Convert remaining decimal part to minutes
     minutes = time_component.astype(int)
@@ -428,15 +429,24 @@ def compute_sky_temp(air_temp, cloud):
     return sky_temp
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--month", required=True, type=str)
+    parser.add_argument("--dt", required=True, type=float)
+    
+    args = parser.parse_args()
+    months = {
+        "january": 0,
+        "june": 151,
+    }
     weather = load_weather_data(
-        weatherDataDir="./", 
+        weatherDataDir="raw_weather/", 
         location="",
         source="KASPRO",
         growthYear=2023,
-        startDay=1,
-        nDays=1,
+        startDay=months[args.month],
+        n_days=31,
         predHorizon=1,
-        h=900.,
-        nd=10
+        h=args.dt,
+        nd=7
     )
-    np.savetxt("weather.csv", weather[:12], delimiter=",")
+    np.savetxt(f"data/{args.month}/weather.csv", weather, delimiter=",")

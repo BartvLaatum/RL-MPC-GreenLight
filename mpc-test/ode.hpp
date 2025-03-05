@@ -1,9 +1,10 @@
-#include "aux_states.hpp"
+#include "aux_states_diff.hpp"
+// #include "aux_states.hpp"
 
 
-SX ODE(const SX& x, const SX& u, const SX& d, const SX& p)
+SX ODE(const SX& x, SX& u, const SX& d, const SX& p)
 {
-    // Compute the auxiliary variables
+    // // Compute the auxiliary variables
     SX a = update(x, u, d, p);
     SX dxdt = SX::zeros(x.size());
 

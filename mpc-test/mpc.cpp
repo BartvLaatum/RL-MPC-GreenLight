@@ -6,42 +6,13 @@
 #include "ode.hpp"
 #include "utils.hpp"
 #include "params.hpp"
-
-// Function to load dummy weather data from a text file
-std::vector<std::vector<double>> load_weather_dummy(int N) {
-    std::vector<std::vector<double>> weather_data;
-    std::ifstream file("weather.csv");
-
-    if (!file.is_open()) {
-        std::cerr << "Error opening weather data file" << std::endl;
-        return weather_data;
-    }
-
-    std::string line;
-    while (std::getline(file, line) && weather_data.size() < N) {
-        std::vector<double> data_row;
-        std::stringstream ss(line);
-        double value;
-
-        while (ss >> value) {
-            data_row.push_back(value);
-            if (ss.peek() == ',') {
-                ss.ignore();
-            }
-        }
-
-        weather_data.push_back(data_row);
-    }
-
-    file.close();
-    return weather_data;
-}
+#include <omp.h>
 
 int main() {
     int np = 208;
     int nx = 28;
-    int nu = 8;
-    int nd = 10;
+    int nu = 6;
+    int nd = 7;
     int na = 240;
     float h = 900.;
     Function integrator_func;
@@ -57,27 +28,24 @@ int main() {
     SX dxdt = ODE(x, u, d, p);
     SX input_args_sym = SX::vertcat({u, d, p});
 
-    Dict opts;
-    // opts["jit"] = true;
-    // opts["compiler"] = "shell";
-    opts["abstol"] = 1e-6;
-    opts["reltol"] = 1e-6;
-    // opts["linear_multistep_method"] = "bdf"; // adams or bdf 
-    // opts["max_num_steps"] = 1000; // Increase as needed
-
+    Dict int_opts;
     // Dict jit_options;
-    // jit_options["flags"] = "-Ofast";
-    // jit_options["compiler"] = "gcc";
-    // opts["jit_options"] = jit_options;
+    
+    // JIT options only for the integrator
+    // jit_options["flags"] = "-Ofast -march=native";
+
+    // int_opts["compiler"] = "shell";
+    int_opts["abstol"] = 1e-6;
+    int_opts["reltol"] = 1e-6;
 
     integrator_func = integrator(
         "integrator_func", "cvodes",
         {{"x", x}, {"p", input_args_sym}, {"ode", dxdt}},
-       0.0, h, opts
+        0.0, h, int_opts
     );
 
     // Prediction horizon
-    const int N = 2;
+    const int N = 96;
 
     // Control variables (decision variables)
     MX U = MX::sym("U", nu, N);
@@ -87,30 +55,57 @@ int main() {
     MX D = MX::sym("D", nd, N);
     MX P = MX::sym("P", np);
 
+    // Initialize Q as a (n+m) x (n+m) matrix of zeros
+    MX Q = MX::zeros(nx + nu, nx + nu);
+    // Set the quadratic term for Xk(2)^2
+    // Note: Xk(2) corresponds to the (2)th index (0-based)
+    Q(2, 2) = 1.0;
+
     // Initialize cost and constraints
     MX J = 0;
     std::vector<MX> g;
 
+    MX Uk;
+    MX Dk;
     // Initialize state trajectory
     MX Xk = X0;
 
+    // Initialize c as a (n+m) vector of zeros
+    MX c = MX::zeros(nx + nu);
+    MX z;
+    MXDict res;
+
+    // Set the linear term for Xk(2)
+    c(2) = -36.0;
+    float hour_conversion = 3600/h;
+    // Set the linear terms for Uk(0),  and Uk(4)
+    c(nx + 0) = 0.09 * P(108) * 1e-3 / hour_conversion; // Uk(0)
+    // c(nx + 1) = 0.2 * P(172) * 1e-3 / hour_conversion;  // Uk(4)x
+    c(nx + 4) = 0.2 * P(172) * 1e-3 / hour_conversion;  // Uk(4)
+
     // Loop over prediction horizon
     for (int k = 0; k < N; ++k) {
-        MX Uk = U(Slice(), k);
-        MX Dk = D(Slice(), k);
+        Uk = U(Slice(), k);
+        Dk = D(Slice(), k);
+
+        // Concatenate state and control vectors
 
         // Integrate to get the next state
-        MXDict res = integrator_func(MXDict{
+        res = integrator_func(MXDict{
             {"x0", Xk},
             {"p", vertcat(Uk, Dk, P)}
         });
         Xk = res.at("xf");
-
+        // J +=
+        z = vertcat(Xk, Uk);
         // Accumulate cost function (e.g., tracking error)
-        J += (Xk(2) - 18)*(Xk(2) - 18) + 0.09 * 80. * Uk(0);
-
-        // Add any path constraints here (if needed)
+        // J += mtimes(z.T(), mtimes(Q, z)) + mtimes(c.T(), z);
+        // economic objective
+        J += 0.09 * P(108) *1e-3 * Uk(0)/hour_conversion +  // convert boil power to kWh (costs for heating)
+             0.2 * P(172) * 1e-3 * Uk(4)/hour_conversion +  // convert lamp electricity to kWh (costs for lighting)
+             0.3 * Uk(1) * 1e-6 * h;                        // costs for CO2
     }
+    J += - (Xk(25)-X0(25))* 1e-6 / 0.08 * 1.2;              // revenue from selling tomatoes
     // Decision variables
     MX w = vec(U);
 
@@ -125,11 +120,12 @@ int main() {
 
     // Create solver options
     Dict nlp_opts;
-    nlp_opts["ipopt.print_level"] = 1;
+    nlp_opts["ipopt.print_level"] = 2;
     nlp_opts["ipopt.max_iter"] = 1000;
     nlp_opts["ipopt.tol"] = 1e-4;
     nlp_opts["ipopt.acceptable_tol"] = 1e-4;
     nlp_opts["print_time"] = false;
+    nlp_opts["ipopt.jacobian_approximation"] = "finite-difference-values";
     nlp_opts["ipopt.hessian_approximation"] = "limited-memory";
     nlp_opts["print_time"] = true;
     nlp_opts["ipopt.linear_solver"] = "ma57";
@@ -203,12 +199,6 @@ int main() {
             DMDict res = integrator_func(integrator_in);
             Xk_num = res.at("xf");
 
-            // Print state
-            std::cout << "Time " << k << ":" << std::endl;
-            for (int j = 0; j < nx; ++j) {
-                std::cout << "x[" << j << "] = " << Xk_num(j).scalar() << std::endl;
-            }
-            std::cout << "---" << std::endl;
         }
 
         // Extract optimal controls
@@ -221,6 +211,23 @@ int main() {
             std::cout << "---" << std::endl;
         }
 
+        // Save optimal controls to a CSV file
+        std::ofstream control_file("optimal_controls.csv");
+        if (control_file.is_open()) {
+            for (int k = 0; k < N; ++k) {
+            for (int j = 0; j < nu; ++j) {
+                control_file << w_opt[k * nu + j];
+                if (j < nu - 1) {
+                control_file << ",";
+                }
+            }
+            control_file << "\n";
+            }
+            control_file.close();
+            std::cout << "Optimal controls saved to optimal_controls.csv" << std::endl;
+        } else {
+            std::cerr << "Error opening file to save optimal controls" << std::endl;
+        }
         // Print solution statistics
         std::cout << "\nSolver statistics:" << std::endl;
         std::cout << "Objective value: " << double(solution.at("f")) << std::endl;

@@ -14,6 +14,7 @@ class Experiment:
             n_days,
         ):
         self.mpc = mpc
+        self.month = month
         self.L = n_days*86400
         self.t = np.arange(0, self.L, mpc.dt)
         self.N = len(self.t)
@@ -81,12 +82,12 @@ class Experiment:
                 p=p_all
             )
             # Extract the optimal control inputs from the solution
-            w_opt = solution["x"].full().flatten().reshape(self.mpc.Np, self.mpc.nu)  # Convert to a NumPy array
-            self.U[:, ll+1] = w_opt[0, :]
+            w_opt = solution["x"].full().flatten().reshape(self.mpc.Np, self.mpc.nu).T  # Convert to a NumPy array
+            self.U[:, ll+1] = w_opt[:, 0]
 
             res = self.mpc.F(x0=self.X[:,ll], u=self.U[:, ll+1], p=ca.vertcat(*[reshape_d[:self.mpc.nd], self.p]))
             self.X[:, ll+1] = res["xf"].toarray().ravel()
-        self.plot_control_trajectories(self.U.T, self.mpc.dt)
+        self.plot_control_trajectories(self.U, self.mpc.dt)
         self.plot_states(self.X, self.mpc.dt)
 
 
@@ -105,30 +106,29 @@ class Experiment:
 
         fig, axes = plt.subplots(3, 2, figsize=(WIDTH, HEIGHT), dpi=180, sharex=True, sharey=True)
 
-        t = np.arange(0, U.shape[0]*900, dt)/86400
+        t = np.arange(0, U.shape[-1]*900, dt)/86400
 
-        axes[0,0].step(t, U[:, 0], color="C0")
-        axes[0,1].step(t, U[:, 1], color="C1")
-        axes[1,0].step(t, U[:, 2], color="C2")
-        axes[1,1].step(t, U[:, 3], color="C3")
-        axes[2,0].step(t, U[:, 4], color="C4")
-        axes[2,1].step(t, U[:, 5], color="C5")
+        axes[0,0].step(t[:-1], U[0, 1:], color="C0", where='post')
+        axes[0,1].step(t[:-1], U[1, 1:], color="C1", where='post')
+        axes[1,0].step(t[:-1], U[2, 1:], color="C2", where='post')
+        axes[1,1].step(t[:-1], U[3, 1:], color="C3", where='post')
+        axes[2,0].step(t[:-1], U[4, 1:], color="C4", where='post')
+        axes[2,1].step(t[:-1], U[5, 1:], color="C5", where='post')
 
         for i, ax in enumerate(axes.flat):
             ax.set_ylabel(control_labels_with_units[i])
 
         fig.supxlabel('Time (days)')
         fig.supylabel('Control Input')
-        fig.suptitle('open-loop Control Trajectories')
+        fig.suptitle('Closed-loop Control Trajectories')
         fig.tight_layout()
-        fig.savefig("controls-openloop.png")
-        # plt.show()
+        fig.savefig(f"figures/{self.month}/control-inputs.png")
 
 
     def plot_states(self, X, dt):
         """Plot the optimized control trajectories."""
         state_labels_with_units = {
-            0: r"Air Temperature ($^\circ$ C)",
+            0: r"Air Temperature ($^\circ$C)",
             1: r"CO$_2$ (mg/m$^3$)",
             2: r"Vapor Pressure (Pa)",
             3: r"Fruit Weight (DM mg/m$^2$)"
@@ -140,10 +140,10 @@ class Experiment:
 
         t = np.arange(0, X.shape[-1]*900, dt)/86400
 
-        axes[0,0].step(t, X[2,:], color="C0")
-        axes[0,1].step(t, X[0, :], color="C0")
-        axes[1,0].step(t, X[15, :], color="C0")
-        axes[1,1].step(t, X[25, :], color="C0")
+        axes[0,0].step(t, X[2,:], color="C0", where='post')
+        axes[0,1].step(t, X[0, :], color="C0", where='post')
+        axes[1,0].step(t, X[15, :], color="C0", where='post')
+        axes[1,1].step(t, X[25, :], color="C0", where='post')
 
         for i, ax in enumerate(axes.flat):
             ax.set_ylabel(state_labels_with_units[i])
@@ -152,7 +152,7 @@ class Experiment:
         fig.supylabel('State variable')
         fig.suptitle('Closed-loop State Trajectories')
         fig.tight_layout()
-        fig.savefig("statev2.png")
+        fig.savefig(f"figures/{self.month}/states.png")
         # plt.show()
 
 
@@ -164,8 +164,7 @@ def main():
     nd = 7
     dt = 900.
     n_days = 1
-    month = 'june'
-    # Prediction horizon
+    month = "june"
     Np = 48
 
     mpc = MPC(nx, nu, n_params, nd, dt, Np)

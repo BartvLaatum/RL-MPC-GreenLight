@@ -109,6 +109,7 @@ SX update(const SX& x, const SX& u, const SX& d, const SX& p) {
     //PAR transmission coefficient of the thermal screen [-]
     // a.tauThScrPar = 1-u(2)*(1-p.tauThScrPar)
     a[0] = 1 - u(2) * (1 - p(80));
+
     //PAR reflection coefficient of the thermal screen [-]
     // a.rhoThScrPar
     a[1] = u(2) * p(77);

@@ -217,7 +217,6 @@ std::vector<double> init_default_params(uint32_t np)
     params[170] = 0;            // pBoilGro;        Max energy input from boiler into the growth system [W/m2]
     params[171] = 0.25 * M_PI * params[166] * ((params[167] * params[167] - params[168] * params[168]) * params[12] * params[24] + params[168] * params[168] * params[13] * params[25]); // capGroPipe; Heat capacity of the growth pipes [J m-2 K-1]
 
-
     // LED LAMP PARAMETERS
     params[172] = 62.5f;        // thetaLampMax;    Max energy input of the lamps [W/m2]
     params[173] = 0;            // heatCorrection;  Heat correction factor for the lamp []
