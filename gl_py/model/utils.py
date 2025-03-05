@@ -5,7 +5,6 @@ import pandas as pd
 
 from model.ode import ODE
 
-
 def define_model(nx: int, nu: int, nd: int, n_params: int, dt: float):
     # Define the symbolic variables for CasADi
     x = ca.SX.sym("x", nx)
@@ -25,7 +24,6 @@ def define_model(nx: int, nu: int, nd: int, n_params: int, dt: float):
     )
 
     return F
-
 
 def satVp_cpp(temp):
     """Calculate saturation vapor pressure"""
