@@ -22,10 +22,12 @@ F = define_model(nx, nu, nd, n_params, dt)
 
 X[:, 0] = x0
 print(controls)
-for i, u in enumerate(controls[1:]):
+controls = np.ones((N, nu))*0.5
+for i, u in enumerate(controls[1:13]):
     res= F(x0=X[:, i], u=u, p=ca.vertcat(weather[i], p))
     X[:, i+1] = res["xf"].full().flatten()
 
 columns = ["co2Air", "co2Top", "tAir", "tTop", "tCan", "tCovIn", "tCovE", "tThScr", "tFlr", "tPipe", "tSo1", "tSo2", "tSo3", "tSo4", "tSo5", "vpAir", "vpTop", "tLamp", "tIntLamp", "tGroPipe", "tBlScr", "tCan24", "cBuf", "cLeaf", "cStem", "cFruit", "tCanSum", "time"]
 X = pd.DataFrame(X.T, columns=columns)
-X.to_csv("results/comparison/june/states-300dt.csv", index=False)
+print(X.head())
+# X.to_csv("results/comparison/june/states-300dt.csv", index=False)
