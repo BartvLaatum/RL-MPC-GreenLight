@@ -15,7 +15,7 @@ class Experiment:
             n_days,
             method,
         ):
-        
+
         self.mpc = mpc
         self.month = month
         self.L = n_days*86400
@@ -83,20 +83,19 @@ class Experiment:
             np.ndarray: the hessian of the cost function
         """
 
+        w_min = [0.0] * (self.mpc.nu * self.mpc.Np)   # Lower bounds
+        w_max = [1.0] * (self.mpc.nu * self.mpc.Np)   # Upper bounds
+        w_init = np.ones((self.mpc.nu*self.mpc.Np))*0.5
+
         for ll in range(self.N):
             print(f"Solving for timestep: {ll}")
             reshape_d = np.concatenate(self.d_values[ll:ll+self.mpc.Np, :])
             p_all = ca.vertcat(self.X[:, ll], reshape_d, self.p)
 
             # Set up initial guess and bounds for decision variables
-            w_init = [0.5] * (self.mpc.nu * self.mpc.Np)  # Initial guess
-            w_min = [0.0] * (self.mpc.nu * self.mpc.Np)   # Lower bounds
-            w_max = [1.0] * (self.mpc.nu * self.mpc.Np)   # Upper bounds
-
             # Set up constraints bounds
             g_min = []  # Lower bounds on constraints
             g_max = []  # Upper bounds on constraints
-
             solution = self.mpc.solver(
                 x0=ca.DM(w_init),
                 lbx=ca.DM(w_min),
@@ -108,7 +107,7 @@ class Experiment:
             # Extract the optimal control inputs from the solution
             w_opt = solution["x"].full().flatten().reshape(self.mpc.Np, self.mpc.nu).T  # Convert to a NumPy array
             self.U[:, ll+1] = w_opt[:, 0]
-
+            w_init = w_opt.flatten()
             res = self.mpc.F(x0=self.X[:,ll], u=self.U[:, ll+1], p=ca.vertcat(*[reshape_d[:self.mpc.nd], self.p]))
             self.X[:, ll+1] = res["xf"].toarray().ravel()
         self.plot_control_trajectories(self.U, self.mpc.dt)
@@ -199,8 +198,6 @@ class Experiment:
             # constraints = solution["g"]
             # Additional outputs could be processed as needed.
 
-        
-
     def save_data(self):
         """Save the data to a file."""
         dir = f"results/{self.method}/{self.month}"
@@ -240,7 +237,6 @@ class Experiment:
         fig.suptitle('Closed-loop Control Trajectories')
         fig.tight_layout()
         fig.savefig(f"figures/{self.method}/{self.month}/control-inputs-{int(self.mpc.dt)}dt.png")
-
 
     def plot_states(self, X, dt):
         """Plot the optimized control trajectories."""
@@ -320,10 +316,10 @@ def main():
     method = "exact"
 
     mpc = MPC(nx, nu, n_params, nd, dt, Np)
-    mpc.define_nlp_multi()
+    mpc.define_nlp()
     exp = Experiment(mpc, month, n_days, method)
-    exp.solve_nmpc_multi()
-    # exp.save_data()
+    exp.solve_nmpc()
+    exp.save_data()
 
 if __name__ == "__main__":
     main()
