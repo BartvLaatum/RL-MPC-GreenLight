@@ -75,7 +75,7 @@ def init_state(d0, rhMax, time_in_days):
     state[1] = state[0]     # co2Top
     state[2] = 18.5         # tAir
     state[3] = state[2]     # tTop
-    state[4] = state[2] + 2 # tCan
+    state[4] = state[2] + 4 # tCan
     state[5] = state[2]     # tCovIn
     state[6] = state[2]     # tCovE
     state[7] = state[2]     # tThScr
@@ -101,7 +101,7 @@ def init_state(d0, rhMax, time_in_days):
     state[27] = time_in_days # time
     return state
 
-def load_dummy_weather(N, month='june'):
+def load_dummy_weather(N, dt, month='june'):
     """Load weather data from CSV file
     Args:
         N: Number of timesteps to load
@@ -110,7 +110,7 @@ def load_dummy_weather(N, month='june'):
         weather_data: List of weather data rows
     """
     try:
-        df = pd.read_csv(f"data/{month}/weather.csv")
+        df = pd.read_csv(f"weather/{month}/weather-{int(dt)}dt.csv")
         weather_data = df.head(N).values
 
     except FileNotFoundError:

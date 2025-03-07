@@ -1,5 +1,6 @@
 import numpy as np
 import casadi as ca
+import os
 
 from mpc import MPC
 from model.utils import load_dummy_weather, init_state
@@ -12,19 +13,17 @@ class Experiment:
             mpc: MPC,
             month,
             n_days,
+            method,
         ):
+        
         self.mpc = mpc
         self.month = month
         self.L = n_days*86400
         self.t = np.arange(0, self.L, mpc.dt)
         self.N = len(self.t)
-        
-
+        self.method = method
         # Load or define your disturbance trajectory
-        self.d_values = load_dummy_weather(self.N+mpc.Np, month=month)
-        print("weather shape", self.d_values.shape)
-        # reshaped_dvalues = np.concatenate(d_values)
-        # print(reshaped_dvalues.shape)
+        self.d_values = load_dummy_weather(self.N+mpc.Np, mpc.dt, month=month)
 
         self.x0 = init_state(self.d_values[0], 85.0, 0.0)
         self.X = np.zeros((mpc.nx, self.N+1))
@@ -32,8 +31,7 @@ class Experiment:
 
         self.X[:, 0] = self.x0
         # Initial state
-        self.p = init_default_params(mpc.n_params)
-
+        self.plot_weather()
         # Parameters
         # p_values = init_default_params(n_params)
 
@@ -90,6 +88,12 @@ class Experiment:
         self.plot_control_trajectories(self.U, self.mpc.dt)
         self.plot_states(self.X, self.mpc.dt)
 
+    def save_data(self):
+        """Save the data to a file."""
+        dir = f"results/{self.method}/{self.month}"
+        os.makedirs(dir, exist_ok=True)
+        np.savetxt(f"{dir}/control-inputs-{self.mpc.dt}dt.csv", self.U.T, delimiter=",")
+        np.savetxt(f"{dir}/states-{self.mpc.dt}dt.csv", self.X.T, delimiter=",")
 
     def plot_control_trajectories(self, U, dt):
         """Plot the optimized control trajectories."""
@@ -106,7 +110,7 @@ class Experiment:
 
         fig, axes = plt.subplots(3, 2, figsize=(WIDTH, HEIGHT), dpi=180, sharex=True, sharey=True)
 
-        t = np.arange(0, U.shape[-1]*900, dt)/86400
+        t = np.arange(0, U.shape[-1]*self.mpc.dt, self.mpc.dt)/86400
 
         axes[0,0].step(t[:-1], U[0, 1:], color="C0", where='post')
         axes[0,1].step(t[:-1], U[1, 1:], color="C1", where='post')
@@ -122,7 +126,7 @@ class Experiment:
         fig.supylabel('Control Input')
         fig.suptitle('Closed-loop Control Trajectories')
         fig.tight_layout()
-        fig.savefig(f"figures/{self.month}/control-inputs.png")
+        fig.savefig(f"figures/{self.method}/{self.month}/control-inputs-{self.mpc.dt}dt.png")
 
 
     def plot_states(self, X, dt):
@@ -138,7 +142,7 @@ class Experiment:
 
         fig, axes = plt.subplots(2, 2, figsize=(WIDTH, HEIGHT), dpi=180, sharex=True)
 
-        t = np.arange(0, X.shape[-1]*900, dt)/86400
+        t = np.arange(0, X.shape[-1]*self.mpc.dt, dt)/86400
 
         axes[0,0].step(t, X[2,:], color="C0", where='post')
         axes[0,1].step(t, X[0, :], color="C0", where='post')
@@ -152,9 +156,42 @@ class Experiment:
         fig.supylabel('State variable')
         fig.suptitle('Closed-loop State Trajectories')
         fig.tight_layout()
-        fig.savefig(f"figures/{self.month}/states.png")
+        fig.savefig(f"figures/{self.method}/{self.month}/states-{self.mpc.dt}dt.png")
         # plt.show()
 
+    def plot_weather(self,):
+        """Plot the optimized control trajectories."""
+        state_labels_with_units = {
+            0: r"Global Radiation (W/m$^2$)",
+            1: r"Air Temperature ($^\circ$C)",
+            2: r"CO$_2$ (mg/m$^3$)",
+            3: r"Vapor Pressure (Pa)",
+            4: r"Wind Speed (m/s)",
+            5: r"Sky Temperature ($^\circ$C)",
+        }
+        WIDTH = 175 * 0.03937
+        HEIGHT = WIDTH * 0.75
+
+        fig, axes = plt.subplots(3, 2, figsize=(WIDTH, HEIGHT), dpi=180, sharex=True)
+
+        t = np.arange(0, self.N*self.mpc.dt, self.mpc.dt)/86400
+
+        axes[0,0].step(t, self.d_values[:self.N, 0], color="C0", where='post')
+        axes[0,1].step(t, self.d_values[:self.N, 1], color="C0", where='post')
+        axes[1,0].step(t, self.d_values[:self.N, 2], color="C0", where='post')
+        axes[1,1].step(t, self.d_values[:self.N, 3], color="C0", where='post')
+        axes[2,0].step(t, self.d_values[:self.N, 4], color="C0", where='post')
+        axes[2,1].step(t, self.d_values[:self.N, 5], color="C0", where='post')
+
+        for i, ax in enumerate(axes.flat):
+            ax.set_ylabel(state_labels_with_units[i])
+
+        fig.supxlabel('Time (days)')
+        fig.supylabel('Variable')
+        fig.suptitle('Weather disturbance')
+        fig.tight_layout()
+        fig.savefig(f"figures/{self.method}/{self.month}/weather-{self.mpc.dt}dt.png")
+        # plt.show()
 
 
 def main():
@@ -162,15 +199,18 @@ def main():
     nx = 28
     nu = 6
     nd = 7
-    dt = 900.
-    n_days = 1
+    dt = 300.
+    n_days = 1.
     month = "june"
-    Np = 48
+    Np = 12
+
+    method = "exact"
 
     mpc = MPC(nx, nu, n_params, nd, dt, Np)
     mpc.define_nlp()
-    exp = Experiment(mpc, month, n_days)
+    exp = Experiment(mpc, month, n_days, method)
     exp.solve_nmpc()
+    exp.save_data()
 
 if __name__ == "__main__":
     main()

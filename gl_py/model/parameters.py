@@ -74,7 +74,7 @@ def init_default_params(n_params):
     params[57] = 1.            # etaInsScr       Insulation factor of the screen []
     params[58] = 0.            # aSide           Side wall area of the greenhouse [m2]
     params[59] = 0.35          # cDgh            Discharge coefficient for the greenhouse [W m-2 K-1]
-    params[60] = 3e-4          # cLeakage        Ventilation leakage coefficient [m3 s-1 m-2 Pa-1]
+    params[60] = 0.3e-4          # cLeakage        Ventilation leakage coefficient [m3 s-1 m-2 Pa-1]
     params[61] = 0.02          # cWgh            Wind shelter factor of the greenhouse []
     params[62] = 0.            # hSideRoo       Height of the side roof [m]
 
@@ -133,9 +133,9 @@ def init_default_params(n_params):
     params[105] = 51e-3      # phiPipeE     External diameter of the heating pipes [m]
     params[106] = (51e-3)-(2.25e-3)        # phiPipeI        Internal diameter of the heating pipes [m]
     params[107] = 1.3375        # lPipe           Length of the heating pipes [m]
-    params[108] = 44.          # pBoil           Max energy input from boiler into the heating system [W/m2]
+    params[108] = 44.*params[46]          # pBoil           Max energy input from boiler into the heating system [W/m2]
 
-    params[109] = 720/params[46]        # phiExtCo2       Capacity of external CO2 source [mg m-2 s-1]
+    params[109] = 720        # phiExtCo2       Capacity of external CO2 source [mg m-2 s-1]
     # capPipe Heat capacity of the heating pipes [J m-2 K-1]
     params[110] = 0.25 * np.pi * params[107] * ((params[105] * params[105] - params[106] * params[106]) * params[12] * params[24] + params[106] * params[106] * params[13] * params[25]) 
 

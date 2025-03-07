@@ -449,4 +449,4 @@ if __name__ == "__main__":
         h=args.dt,
         nd=7
     )
-    np.savetxt(f"data/{args.month}/weather.csv", weather, delimiter=",")
+    np.savetxt(f"data/{args.month}/weather-{int(args.dt)}dt.csv", weather, delimiter=",")
