@@ -123,7 +123,7 @@ class Experiment:
         fig.supylabel('Control Input')
         fig.suptitle('Closed-loop Control Trajectories')
         fig.tight_layout()
-        fig.savefig(f"figures/{self.method}/{self.month}/control-inputs-{self.mpc.dt}dt.png")
+        fig.savefig(f"figures/{self.method}/{self.month}/control-inputs-{int(self.mpc.dt)}dt.png")
 
 
     def plot_states(self, X, dt):
@@ -153,7 +153,7 @@ class Experiment:
         fig.supylabel('State variable')
         fig.suptitle('Closed-loop State Trajectories')
         fig.tight_layout()
-        fig.savefig(f"figures/{self.method}/{self.month}/states-{self.mpc.dt}dt.png")
+        fig.savefig(f"figures/{self.method}/{self.month}/states-{int(self.mpc.dt)}dt.png")
         # plt.show()
 
     def plot_weather(self,):
@@ -187,7 +187,7 @@ class Experiment:
         fig.supylabel('Variable')
         fig.suptitle('Weather disturbance')
         fig.tight_layout()
-        fig.savefig(f"figures/{self.method}/{self.month}/weather-{self.mpc.dt}dt.png")
+        fig.savefig(f"figures/{self.method}/{self.month}/weather-{int(self.mpc.dt)}dt.png")
         # plt.show()
 
 
@@ -201,7 +201,7 @@ def main():
     month = "june"
     Np = 12
 
-    method = "finite-difference"
+    method = "exact"
 
     mpc = MPC(nx, nu, n_params, nd, dt, Np)
     mpc.define_nlp()
