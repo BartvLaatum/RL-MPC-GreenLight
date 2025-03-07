@@ -31,11 +31,8 @@ class Experiment:
 
         self.X[:, 0] = self.x0
         # Initial state
+        self.p = init_default_params(mpc.n_params)
         self.plot_weather()
-        # Parameters
-        # p_values = init_default_params(n_params)
-
-        # Concatenate parameters
 
 
 
@@ -204,7 +201,7 @@ def main():
     month = "june"
     Np = 12
 
-    method = "exact"
+    method = "finite-difference"
 
     mpc = MPC(nx, nu, n_params, nd, dt, Np)
     mpc.define_nlp()
