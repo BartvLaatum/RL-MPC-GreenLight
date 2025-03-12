@@ -100,9 +100,10 @@ class MPC:
         nlp_opts["ipopt.tol"] = 1e-4
         nlp_opts["ipopt.acceptable_tol"] = 1e-4
         nlp_opts["print_time"] = True
-        # nlp_opts["ipopt.jacobian_approximation"] = "finite-difference-values"
-        # nlp_opts["ipopt.hessian_approximation"] = "limited-memory"
-        nlp_opts["ipopt.linear_solver"] = "ma57"
+        nlp_opts["ipopt.jacobian_approximation"] = "finite-difference-values"
+        nlp_opts["ipopt.hessian_approximation"] = "limited-memory"
+        nlp_opts["ipopt.warm_start_init_point"] = "yes"
+        nlp_opts["ipopt.linear_solver"] = "mumps" #"ma57"
 
         # Create solver
         self.solver = ca.nlpsol("solver", "ipopt", nlp, nlp_opts)

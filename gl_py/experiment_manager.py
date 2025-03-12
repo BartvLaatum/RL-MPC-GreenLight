@@ -7,6 +7,8 @@ from model.utils import load_dummy_weather, init_state
 from model.parameters import init_default_params
 import matplotlib.pyplot as plt
 
+import time
+
 class Experiment:
     def __init__(
             self,
@@ -22,6 +24,7 @@ class Experiment:
         self.t = np.arange(0, self.L, mpc.dt)
         self.N = len(self.t)
         self.method = method
+        self.exectime = np.zeros((1, self.N))
         # Load or define your disturbance trajectory
         self.d_values = load_dummy_weather(self.N+mpc.Np, mpc.dt, month=month)
 
@@ -53,21 +56,25 @@ class Experiment:
             np.ndarray: the gradient of the cost function
             np.ndarray: the hessian of the cost function
         """
-
+        w_init = [1.0] * (self.mpc.nu * self.mpc.Np)  # Initial guess
+        
         for ll in range(self.N):
             print(f"Solving for timestep: {ll}")
             reshape_d = np.concatenate(self.d_values[ll:ll+self.mpc.Np, :])
             p_all = ca.vertcat(self.X[:, ll], reshape_d, self.p)
 
             # Set up initial guess and bounds for decision variables
-            w_init = [0.5] * (self.mpc.nu * self.mpc.Np)  # Initial guess
+            # w_init = [1.0] * (self.mpc.nu * self.mpc.Np)  # Initial guess
             w_min = [0.0] * (self.mpc.nu * self.mpc.Np)   # Lower bounds
             w_max = [1.0] * (self.mpc.nu * self.mpc.Np)   # Upper bounds
 
             # Set up constraints bounds
             g_min = []  # Lower bounds on constraints
             g_max = []  # Upper bounds on constraints
-
+            
+            # Start timing
+            start_time = time.time()
+            
             solution = self.mpc.solver(
                 x0=ca.DM(w_init),
                 lbx=ca.DM(w_min),
@@ -76,12 +83,22 @@ class Experiment:
                 ubg=ca.DM(g_max),
                 p=p_all
             )
+            
+            # End timing
+            end_time = time.time()
+            self.exectime[0, ll] = end_time - start_time
+            # Print execution time
+            print(f"Execution time: {self.exectime[0, ll]:.6f} seconds")
+            print("EXIT status:\033[42m", self.mpc.solver.stats()['return_status'],"\033[0m \n")
             # Extract the optimal control inputs from the solution
             w_opt = solution["x"].full().flatten().reshape(self.mpc.Np, self.mpc.nu).T  # Convert to a NumPy array
             self.U[:, ll+1] = w_opt[:, 0]
-
+            # Set up initial guess for the next iteration
+            w_init = np.hstack((w_opt[:,1:],w_opt[:,w_opt.shape[1]-1].reshape(-1,1))).flatten(order='F').tolist()
+            
             res = self.mpc.F(x0=self.X[:,ll], u=self.U[:, ll+1], p=ca.vertcat(*[reshape_d[:self.mpc.nd], self.p]))
             self.X[:, ll+1] = res["xf"].toarray().ravel()
+        print(f"Mean execution time: {np.mean(self.exectime[0, :]):.6f} seconds")  
         self.plot_control_trajectories(self.U, self.mpc.dt)
         self.plot_states(self.X, self.mpc.dt)
 
@@ -89,8 +106,9 @@ class Experiment:
         """Save the data to a file."""
         dir = f"results/{self.method}/{self.month}"
         os.makedirs(dir, exist_ok=True)
-        np.savetxt(f"{dir}/control-inputs-{self.mpc.dt}dt.csv", self.U.T, delimiter=",")
-        np.savetxt(f"{dir}/states-{self.mpc.dt}dt.csv", self.X.T, delimiter=",")
+        np.savetxt(f"{dir}/control-inputs-{self.mpc.dt}dt-{int(self.mpc.Np)}Np.csv", self.U.T, delimiter=",")
+        np.savetxt(f"{dir}/states-{self.mpc.dt}dt-{int(self.mpc.Np)}Np.csv", self.X.T, delimiter=",")
+        np.savetxt(f"{dir}/exectime-{self.mpc.dt}dt-{int(self.mpc.Np)}Np.csv", self.exectime.T, delimiter=",")
 
     def plot_control_trajectories(self, U, dt):
         """Plot the optimized control trajectories."""
@@ -123,7 +141,7 @@ class Experiment:
         fig.supylabel('Control Input')
         fig.suptitle('Closed-loop Control Trajectories')
         fig.tight_layout()
-        fig.savefig(f"figures/{self.method}/{self.month}/control-inputs-{int(self.mpc.dt)}dt.png")
+        fig.savefig(f"figures/{self.method}/{self.month}/control-inputs-{int(self.mpc.dt)}dt-{int(self.mpc.Np)}Np.png")
 
 
     def plot_states(self, X, dt):
@@ -153,7 +171,7 @@ class Experiment:
         fig.supylabel('State variable')
         fig.suptitle('Closed-loop State Trajectories')
         fig.tight_layout()
-        fig.savefig(f"figures/{self.method}/{self.month}/states-{int(self.mpc.dt)}dt.png")
+        fig.savefig(f"figures/{self.method}/{self.month}/states-{int(self.mpc.dt)}dt-{int(self.mpc.Np)}Np.png")
         # plt.show()
 
     def plot_weather(self,):
@@ -187,7 +205,7 @@ class Experiment:
         fig.supylabel('Variable')
         fig.suptitle('Weather disturbance')
         fig.tight_layout()
-        fig.savefig(f"figures/{self.method}/{self.month}/weather-{int(self.mpc.dt)}dt.png")
+        fig.savefig(f"figures/{self.method}/{self.month}/weather-{int(self.mpc.dt)}dt-{int(self.mpc.Np)}Np.png")
         # plt.show()
 
 
@@ -198,10 +216,10 @@ def main():
     nd = 7
     dt = 300.
     n_days = 1.
-    month = "june"
+    month = "june" #"january" #
     Np = 12
 
-    method = "exact"
+    method =  "finite-differences" #"exact"
 
     mpc = MPC(nx, nu, n_params, nd, dt, Np)
     mpc.define_nlp()
