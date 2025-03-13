@@ -1,6 +1,8 @@
 import pandas as pd
 import numpy as np
 
+import plot_config
+
 method = "comparison"
 
 matlab_states = pd.read_csv(f"results/{method}/june/matlab-states-300dt.csv")
