@@ -4,8 +4,9 @@ import os
 import time
 
 from mpc import MPC
-from model.utils import load_dummy_weather, init_state
+from model.utils import load_dummy_weather, init_state, convert_rh_ppm
 from model.parameters import init_default_params
+from visualizations.trajectories import plot_control_trajectories, plot_states
 
 class Experiment:
     def __init__(
@@ -30,89 +31,11 @@ class Experiment:
         self.U = np.zeros((mpc.nu, self.N+1))
 
         self.X[:, 0] = self.x0
+        self.U[:, 0] = np.ones(mpc.nu)*0.5
         # Initial state
         self.p = init_default_params(mpc.n_params)
         # self.plot_weather()
 
-    def get_init(self, ll, U_init=None):
-        # Retrieve dimensions
-        nx = self.mpc.nx
-        nu = self.mpc.nu
-        Np = self.mpc.Np
-        # Initial guess for control inputs
-        if U_init is None:
-            U_init = 0.5 * np.ones((nu, Np))
-
-        # Build an initial guess for the state trajectory by propagating X0.
-        X_init = np.zeros((nx, Np+1))
-        # Set the initial state from the current state at time ll.
-        X_init[:, 0] = self.X[:, ll]  # assuming self.X[:, ll] is a numpy array
-
-        # Propagate the dynamics using the initial guess for controls.
-        for k in range(Np):
-            # Use the k-th control guess
-            u_k = U_init[:, k]
-            # Use the k-th disturbance from d_values (ensure proper shape)
-            D_k = self.d_values[ll + k, :]  
-            # Build the parameter vector for F as: [D_k; self.p]
-            p_dyn = ca.vertcat(ca.DM(D_k), self.p)
-            # Propagate the state: note that F returns a dictionary with key "xf"
-            res = self.mpc.F(x0=ca.DM(X_init[:, k]), u=ca.DM(u_k), p=p_dyn)
-            # Extract the next state; convert to a 1D NumPy array.
-            X_next = res["xf"].full().flatten()
-            X_init[:, k+1] = X_next
-
-        print(X_init.T.flatten().shape)
-        print(U_init.T.flatten().shape)
-        # Now, form the overall decision vector initial guess by concatenating X_init and U_init.
-        w_init = np.concatenate([X_init.T.flatten(), U_init.T.flatten()])
-        return w_init
-
-    def solve_nmpc(self):
-        """
-        Solve the nonlinear MPC problem.
-
-        Args:
-            p (Dict[str, Any]): the model parameters
-
-        Returns:
-            np.ndarray: the optimal control inputs
-            float: the cost value
-            np.ndarray: the constraints
-            Dict[str, Any]: the optimization output
-            np.ndarray: the control input changes
-            np.ndarray: the gradient of the cost function
-            np.ndarray: the hessian of the cost function
-        """
-
-        w_min = [0.0] * (self.mpc.nu * self.mpc.Np)   # Lower bounds
-        w_max = [1.0] * (self.mpc.nu * self.mpc.Np)   # Upper bounds
-        w_init = np.ones((self.mpc.nu*self.mpc.Np))*0.5
-
-        for ll in range(self.N):
-            print(f"Solving for timestep: {ll}")
-            reshape_d = np.concatenate(self.d_values[ll:ll+self.mpc.Np, :])
-            p_all = ca.vertcat(self.X[:, ll], reshape_d, self.p)
-
-            # Set up initial guess and bounds for decision variables
-            # Set up constraints bounds
-            g_min = []  # Lower bounds on constraints
-            g_max = []  # Upper bounds on constraints
-            solution = self.mpc.solver_single(
-                x0=ca.DM(w_init),
-                lbx=ca.DM(w_min),
-                ubx=ca.DM(w_max),
-                lbg=ca.DM(g_min),
-                ubg=ca.DM(g_max),
-                p=p_all
-            )
-            # Extract the optimal control inputs from the solution
-            w_opt = solution["x"].full().flatten().reshape(self.mpc.Np, self.mpc.nu).T  # Convert to a NumPy array
-            self.U[:, ll+1] = w_opt[:, 0]
-            w_init = w_opt.T.flatten()
-            w_init = np.concatenate([w_init[self.mpc.nu:], w_init[-self.mpc.nu:]])
-            res = self.mpc.F(x0=self.X[:,ll], u=self.U[:, ll+1], p=ca.vertcat(*[reshape_d[:self.mpc.nd], self.p]))
-            self.X[:, ll+1] = res["xf"].toarray().ravel()
 
     # def get_init_multi(self, ll, U_init=None):
     #     print("obtaining single shooting guess")
@@ -162,6 +85,108 @@ class Experiment:
 
     #     w_init = np.concatenate([X_init.T.flatten(), U_init.T.flatten()])
     #     return w_init
+
+
+    def get_init(self, ll, U_init=None):
+        # Retrieve dimensions
+        nx = self.mpc.nx
+        nu = self.mpc.nu
+        Np = self.mpc.Np
+        # Initial guess for control inputs
+        if U_init is None:
+            U_init = 0.5 * np.ones((nu, Np))
+
+        # Build an initial guess for the state trajectory by propagating X0.
+        X_init = np.zeros((nx, Np+1))
+        # Set the initial state from the current state at time ll.
+        X_init[:, 0] = self.X[:, ll]  # assuming self.X[:, ll] is a numpy array
+
+        # Propagate the dynamics using the initial guess for controls.
+        for k in range(Np):
+            # Use the k-th control guess
+            u_k = U_init[:, k]
+            # Use the k-th disturbance from d_values (ensure proper shape)
+            D_k = self.d_values[ll + k, :]  
+            # Build the parameter vector for F as: [D_k; self.p]
+            p_dyn = ca.vertcat(ca.DM(D_k), self.p)
+            # Propagate the state: note that F returns a dictionary with key "xf"
+            res = self.mpc.F(x0=ca.DM(X_init[:, k]), u=ca.DM(u_k), p=p_dyn)
+            # Extract the next state; convert to a 1D NumPy array.
+            X_next = res["xf"].full().flatten()
+            X_init[:, k+1] = X_next
+
+        # Now, form the overall decision vector initial guess by concatenating X_init and U_init.
+        w_init = np.concatenate([X_init.T.flatten(), U_init.T.flatten()])
+        return w_init
+
+    def solve_nmpc(self):
+        """
+        Solve the nonlinear MPC problem.
+
+        Args:
+            p (Dict[str, Any]): the model parameters
+
+        Returns:
+            np.ndarray: the optimal control inputs
+            float: the cost value
+            np.ndarray: the constraints
+            Dict[str, Any]: the optimization output
+            np.ndarray: the control input changes
+            np.ndarray: the gradient of the cost function
+            np.ndarray: the hessian of the cost function
+        """
+
+        u_min = [0.0] * (self.mpc.nu * self.mpc.Np)   # Lower bounds
+        u_max = [1.0] * (self.mpc.nu * self.mpc.Np)   # Upper bounds
+
+        s_min = [-ca.inf] * (self.mpc.ns * self.mpc.Np)   # Lower bounds
+        s_max = [ca.inf] * (self.mpc.ns * self.mpc.Np)   # Upper bounds
+
+        w_min = u_min + s_min
+        w_max = u_max + s_max
+
+        u_init = np.ones((self.mpc.nu, self.mpc.Np))*0.5
+        s_init = np.zeros((self.mpc.ns, self.mpc.Np))
+        s_init.T.flatten()
+        w_init = np.concatenate([u_init.T.flatten(), s_init.T.flatten()])
+
+        times = []
+        # for ll in range(self.N):
+        for ll in range(10):
+            print(f"Solving for timestep: {ll}")
+            t = time.time()
+            reshape_d = np.concatenate(self.d_values[ll:ll+self.mpc.Np, :])
+            p_all = ca.vertcat(self.X[:, ll], self.U[:, ll], reshape_d, self.p)
+
+            # Set up initial guess and bounds for decision variables
+            # Set up constraints bounds
+
+            # g_min = [*-self.mpc.du_max]*self.mpc.Np  # Lower bounds on constraints
+            # g_max = [*self.mpc.du_max]*self.mpc.Np   # Upper bounds on constraints
+            solution = self.mpc.solver_single(
+                x0=ca.DM(w_init),
+                lbx=ca.DM(w_min),
+                ubx=ca.DM(w_max),
+                lbg=ca.DM(self.mpc.lbg),
+                ubg=ca.DM(self.mpc.ubg),
+                p=p_all
+            )
+
+            # Extract the optimal control inputs from the solution
+            w_opt = solution["x"].full().flatten()
+            us_opt = w_opt[:self.mpc.nu*self.mpc.Np].reshape(self.mpc.Np, self.mpc.nu).T
+            self.U[:, ll+1] = us_opt[:, 0]
+
+            # Update the initial guess for the next iteration; using the rolled previous solution 
+            w_init = w_opt.T.flatten()
+            w_init = np.concatenate([w_init[self.mpc.nu+self.mpc.ns:], w_init[-(self.mpc.nu+self.mpc.ns):]])
+
+            # simulate the next time step
+            res = self.mpc.F(x0=self.X[:,ll], u=self.U[:, ll+1], p=ca.vertcat(*[reshape_d[:self.mpc.nd], self.p]))
+            self.X[:, ll+1] = res["xf"].toarray().ravel()
+            times.append(time.time()-t)
+
+        print(f"Average solver time per iteration: {np.mean(times)} (s)")
 
     def solve_nmpc_multi(self):
         """
@@ -275,16 +300,18 @@ class Experiment:
 
 def solver_opts(method):
     nlp_opts = {}
-    nlp_opts["ipopt.print_level"] = 0
+    nlp_opts["ipopt.print_level"] = 5
     nlp_opts["ipopt.warm_start_init_point"] = "yes"
-    nlp_opts["ipopt.max_iter"] = 5000
-    nlp_opts["ipopt.tol"] = 1e-4
-    nlp_opts["ipopt.acceptable_tol"] = 1e-4
+    nlp_opts["ipopt.max_iter"] = 1000
+    nlp_opts["ipopt.tol"] = 1e-2
+    nlp_opts["ipopt.acceptable_tol"] = 1e-2
     nlp_opts["print_time"] = True
     nlp_opts["ipopt.linear_solver"] = "ma57"
+
     if method == "finite-difference":
         nlp_opts["ipopt.jacobian_approximation"] = "finite-difference-values"
         nlp_opts["ipopt.hessian_approximation"] = "limited-memory"
+
     elif method == "exact":
         nlp_opts["ipopt.jacobian_approximation"] = "exact"
         nlp_opts["ipopt.hessian_approximation"] = "exact"
@@ -294,20 +321,31 @@ def main():
     n_params = 208
     nx = 28
     nu = 6
+    ns = 6
     nd = 7
     dt = 300.
     n_days = 1
     month = "june"
     Np = 12
-    method = "finite-difference"
-    approach = "multiple"
-
+    method = "exact"
+    approach = "single"
+    print(f"Running {method} method")
     nlp_opts = solver_opts(method)
 
-    mpc = MPC(nx, nu, n_params, nd, dt, Np, nlp_opts)
-    mpc.define_nlp_multi()
+    mpc = MPC(nx, nu, ns, n_params, nd, dt, Np, nlp_opts)
+    mpc.define_nlp()
     exp = Experiment(mpc, month, n_days, method)
-    exp.solve_nmpc_multi()
+    exp.solve_nmpc()
+    # breakpoint()
+    exp.X = convert_rh_ppm(exp.X)
+    data = {
+        method: {
+            "U": exp.U,
+            "X": exp.X
+        }
+    }
+    plot_control_trajectories(data, dt)
+    plot_states(data, dt)
     exp.save_data(approach)
 
 if __name__ == "__main__":

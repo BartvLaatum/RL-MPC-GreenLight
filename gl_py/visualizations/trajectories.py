@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-import plot_config
+import visualizations.plot_config
 
 def plot_control_trajectories(data, dt):
     """Plot the optimized control trajectories."""
@@ -36,8 +36,8 @@ def plot_control_trajectories(data, dt):
     fig.supylabel('Control Input')
     fig.suptitle('Closed-loop Control Trajectories')
     fig.tight_layout()
-    # plt.show()
-    fig.savefig(f"figures/exact-finite/{approach}/{month}/control-inputs-{int(dt)}dt.png")
+    plt.show()
+    # fig.savefig(f"figures/exact-finite/{approach}/{month}/control-inputs-{int(dt)}dt.png")
 
 def plot_states(data, dt):
     """Plot the optimized control trajectories."""
@@ -69,7 +69,8 @@ def plot_states(data, dt):
     fig.supylabel('State variable')
     fig.suptitle('Closed-loop State Trajectories')
     fig.tight_layout()
-    fig.savefig(f"figures/exact-finite/{approach}/{month}/states-{int(dt)}dt.png")
+    plt.show()
+    # fig.savefig(f"figures/exact-finite/{approach}/{month}/states-{int(dt)}dt.png")
 
 def load_data(methods, month):
     """Load the data from the CSV files."""
