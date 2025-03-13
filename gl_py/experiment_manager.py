@@ -1,7 +1,10 @@
-import numpy as np
-import casadi as ca
+import argparse
+
 import os
 import time
+
+import numpy as np
+import casadi as ca
 
 from mpc import MPC
 from model.utils import load_dummy_weather, init_state, convert_rh_ppm
@@ -16,7 +19,6 @@ class Experiment:
             n_days,
             method,
         ):
-
         self.mpc = mpc
         self.month = month
         self.L = n_days*86400
@@ -87,7 +89,7 @@ class Experiment:
     #     return w_init
 
 
-    def get_init(self, ll, U_init=None):
+    def get_x_init(self, ll, U_init=None):
         # Retrieve dimensions
         nx = self.mpc.nx
         nu = self.mpc.nu
@@ -103,10 +105,13 @@ class Experiment:
 
         # Propagate the dynamics using the initial guess for controls.
         for k in range(Np):
+
             # Use the k-th control guess
             u_k = U_init[:, k]
+
             # Use the k-th disturbance from d_values (ensure proper shape)
-            D_k = self.d_values[ll + k, :]  
+            D_k = self.d_values[ll + k, :]
+
             # Build the parameter vector for F as: [D_k; self.p]
             p_dyn = ca.vertcat(ca.DM(D_k), self.p)
             # Propagate the state: note that F returns a dictionary with key "xf"
@@ -116,8 +121,7 @@ class Experiment:
             X_init[:, k+1] = X_next
 
         # Now, form the overall decision vector initial guess by concatenating X_init and U_init.
-        w_init = np.concatenate([X_init.T.flatten(), U_init.T.flatten()])
-        return w_init
+        return X_init.T.flatten()
 
     def solve_nmpc(self):
         """
@@ -152,12 +156,10 @@ class Experiment:
 
         times = []
         for ll in range(self.N):
-        # for ll in range(10):
             print(f"Solving for timestep: {ll}")
             t = time.time()
             reshape_d = np.concatenate(self.d_values[ll:ll+self.mpc.Np, :])
             p_all = ca.vertcat(self.X[:, ll], self.U[:, ll], reshape_d, self.p)
-
             # Set up initial guess and bounds for decision variables
             # Set up constraints bounds
 
@@ -175,13 +177,15 @@ class Experiment:
             # Extract the optimal control inputs from the solution
             w_opt = solution["x"].full().flatten()
             us_opt = w_opt[:self.mpc.nu*self.mpc.Np].reshape(self.mpc.Np, self.mpc.nu).T
-            self.U[:, ll+1] = us_opt[:, 0]
+            s_opt = w_opt[-(self.mpc.ns*self.mpc.Np):].reshape(self.mpc.Np, self.mpc.ns).T     
 
             # Update the initial guess for the next iteration; using the rolled previous solution 
-            w_init = w_opt.T.flatten()
-            w_init = np.concatenate([w_init[self.mpc.nu+self.mpc.ns:], w_init[-(self.mpc.nu+self.mpc.ns):]])
+            u_init = np.concatenate([us_opt[:, 1:].T.flatten(), us_opt[:, -1].T.flatten()])
+            s_init = np.concatenate([s_opt[:, 1:].T.flatten(), s_opt[:, -1].T.flatten()])
+            w_init = np.concatenate([u_init, s_init])
 
             # simulate the next time step
+            self.U[:, ll+1] = us_opt[:, 0]
             res = self.mpc.F(x0=self.X[:,ll], u=self.U[:, ll+1], p=ca.vertcat(*[reshape_d[:self.mpc.nd], self.p]))
             self.X[:, ll+1] = res["xf"].toarray().ravel()
             times.append(time.time()-t)
@@ -204,81 +208,67 @@ class Experiment:
             np.ndarray: the gradient of the cost function
             np.ndarray: the hessian of the cost function
         """
-        # Retrieve dimensions
-        nx = self.mpc.nx
-        nu = self.mpc.nu
-        Np = self.mpc.Np
+        u_min = [0.0] * (self.mpc.nu * self.mpc.Np)   # Lower bounds
+        u_max = [1.0] * (self.mpc.nu * self.mpc.Np)   # Upper bounds
+
+        s_min = [-ca.inf] * (self.mpc.ns * self.mpc.Np)   # Lower bounds
+        s_max = [ca.inf] * (self.mpc.ns * self.mpc.Np)   # Upper bounds
+
+        x_min = [-ca.inf] * (self.mpc.nx * (self.mpc.Np+1))   # Lower bounds
+        x_max = [ca.inf] * (self.mpc.nx * (self.mpc.Np+1))   # Upper bounds
+
+        w_min = u_min + s_min + x_min
+        w_max = u_max + s_max + x_max
+
+        u_init = np.ones((self.mpc.nu, self.mpc.Np))*0.5
+
+        x_init = self.get_x_init(0, u_init)
+
+        # x_init = np.zeros((self.mpc.nx, self.mpc.Np+1))
+
+        s_init = np.zeros((self.mpc.ns, self.mpc.Np))
+        s_init.T.flatten()
+        w_init = np.concatenate([u_init.T.flatten(), x_init.T.flatten(), s_init.T.flatten()])
 
         times = []
-        # initial guess for the decision vector
-        w_init = self.get_init(0)
-
-        for ll in range(self.N):
-        # for ll in range (10):
-            t = time.time()
+        # for ll in range(self.N):
+        for ll in range(2):
             print(f"Solving for timestep: {ll}")
-            # Build the disturbance vector for the prediction horizon.
-            reshape_d = np.concatenate(self.d_values[ll:ll+self.mpc.Np, :], axis=0)
+            t = time.time()
+            reshape_d = np.concatenate(self.d_values[ll:ll+self.mpc.Np, :])
+            p_all = ca.vertcat(self.X[:, ll], self.U[:, ll], reshape_d, self.p)
+            # Set up initial guess and bounds for decision variables
+            # Set up constraints bounds
 
-            # The parameter vector now must include the current state, the disturbances over the horizon, and other parameters.
-            # The NLP was defined with p = [X0; vec(D); P], where X0 is the current state.
-            p_all = ca.vertcat(self.X[:, ll], reshape_d, self.p)
-
-            # --- Bounds for Decision Variables ---
-            # For states, if there are no explicit state bounds, we use large numbers.
-            X_lb = -np.inf * np.ones((nx, Np+1))
-            X_ub =  np.inf * np.ones((nx, Np+1))
-            # For control inputs, we use the original bounds [0, 1].
-            U_lb = np.zeros((nu, Np))
-            U_ub = np.ones((nu, Np))
-
-            # Combine bounds for states and controls.
-            w_lb = np.concatenate([X_lb.flatten(), U_lb.flatten()])
-            w_ub = np.concatenate([X_ub.flatten(), U_ub.flatten()])
-
-            # --- Constraint Bounds ---
-            # There are equality constraints enforcing the initial state and dynamic consistency:
-            #   - Initial condition: X[:, 0] - X0 = 0   (nx constraints)
-            #   - Dynamic constraints: X[:, k+1] - F(X[:, k], U[:, k]) = 0 for each k (nx constraints per interval)
-            # Total constraints = nx + (nx * Np) = nx * (Np + 1)
-            n_con = nx * (Np + 1)
-            g_lb = np.zeros(n_con)
-            g_ub = np.zeros(n_con)
-
-            # --- Solve the NLP ---
-            solution = self.mpc.solver(
+            # g_min = [*-self.mpc.du_max]*self.mpc.Np  # Lower bounds on constraints
+            # g_max = [*self.mpc.du_max]*self.mpc.Np   # Upper bounds on constraints
+            solution = self.mpc.solver_multi(
                 x0=ca.DM(w_init),
-                lbx=ca.DM(w_lb),
-                ubx=ca.DM(w_ub),
-                lbg=ca.DM(g_lb),
-                ubg=ca.DM(g_ub),
+                lbx=ca.DM(w_min),
+                ubx=ca.DM(w_max),
+                lbg=ca.DM(self.mpc.lbg),
+                ubg=ca.DM(self.mpc.ubg),
                 p=p_all
             )
 
-            # --- Process the Solution ---
+            # Extract the optimal decision variables from the solution
             w_opt = solution["x"].full().flatten()
-            # Extract the state trajectory and control inputs from the decision vector.
-            X_opt = w_opt[:nx*(Np+1)].reshape((Np+1, nx)).T
-            U_opt = w_opt[nx*(Np+1):].reshape((Np, nu)).T
+            
+            us_opt = w_opt[:self.mpc.nu*self.mpc.Np].reshape(self.mpc.Np, self.mpc.nu).T
+            xs_opt = w_opt[self.mpc.nu*self.mpc.Np:self.mpc.nu*self.mpc.Np+self.mpc.nx*(self.mpc.Np+1)].reshape(self.mpc.Np+1, self.mpc.nx).T
+            s_opt = w_opt[-(self.mpc.ns*self.mpc.Np):].reshape(self.mpc.Np, self.mpc.ns).T
 
-            # Apply the first control input to the system.
-            self.U[:, ll+1] = U_opt[:, 0]
+            # Update the initial guess for the next iteration; using the rolled previous solution 
+            u_init = np.concatenate([us_opt[:, 1:].T.flatten(), us_opt[:, -1].T.flatten()])
+            x_init = np.concatenate([xs_opt[:, 1:].T.flatten(), xs_opt[:, -1].T.flatten()])
+            s_init = np.concatenate([s_opt[:, 1:].T.flatten(), s_opt[:, -1].T.flatten()])
 
-            # Update the state using the predicted state from the multiple-shooting trajectory.
+            w_init = np.concatenate([u_init, x_init, s_init])
+
+            # simulate the next time step
+            self.U[:, ll+1] = us_opt[:, 0]
             res = self.mpc.F(x0=self.X[:,ll], u=self.U[:, ll+1], p=ca.vertcat(*[reshape_d[:self.mpc.nd], self.p]))
-
             self.X[:, ll+1] = res["xf"].toarray().ravel()
-
-            # Update the initial guess for the next iteration.
-            w_init = np.concatenate(
-                [
-                    self.X[:, ll+1].T.flatten(),
-                    w_opt[nx:nx*(Np+1)],
-                    w_opt[nx*(Np+1)+nu:],
-                    w_opt[-nu:],
-                ]
-            )
-            # breakpoint()
             times.append(time.time()-t)
 
         print(f"Average solver time per iteration: {np.mean(times)} (s)")
@@ -295,12 +285,12 @@ class Experiment:
         """Save the data to a file."""
         dir = f"results/{self.method}/{approach}/{self.month}"
         os.makedirs(dir, exist_ok=True)
-        np.savetxt(f"{dir}/control-inputs-{int(self.mpc.dt)}dt.csv", self.U.T, delimiter=",")
-        np.savetxt(f"{dir}/states-{int(self.mpc.dt)}dt.csv", self.X.T, delimiter=",")
+        np.savetxt(f"{dir}/control-inputs-cs-{int(self.mpc.dt)}dt.csv", self.U.T, delimiter=",")
+        np.savetxt(f"{dir}/states-cs-{int(self.mpc.dt)}dt.csv", self.X.T, delimiter=",")
 
 def solver_opts(method):
     nlp_opts = {}
-    nlp_opts["ipopt.print_level"] = 5
+    nlp_opts["ipopt.print_level"] = 2
     nlp_opts["ipopt.warm_start_init_point"] = "yes"
     nlp_opts["ipopt.max_iter"] = 1000
     nlp_opts["ipopt.tol"] = 1e-2
@@ -318,6 +308,11 @@ def solver_opts(method):
     return nlp_opts
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--method", type=str, choices=["exact", "finite-difference"], required=True)
+    parser.add_argument("--approach", type=str, choices=["single", "multi"], required=True)
+    args = parser.parse_args()
+
     n_params = 208
     nx = 28
     nu = 6
@@ -327,26 +322,33 @@ def main():
     n_days = 1
     month = "june"
     Np = 12
-    method = "exact"
-    approach = "single"
-    print(f"Running {method} method")
-    nlp_opts = solver_opts(method)
+
+    print(f"Running {args.method} method")
+    print(f"Using {args.approach}-shooting approach")
+    nlp_opts = solver_opts(args.method)
 
     mpc = MPC(nx, nu, ns, n_params, nd, dt, Np, nlp_opts)
-    mpc.define_nlp()
-    exp = Experiment(mpc, month, n_days, method)
-    exp.solve_nmpc()
-    # breakpoint()
+    exp = Experiment(mpc, month, n_days, args.method)
+
+    if args.approach == "single":
+        exp.mpc.define_nlp()
+        exp.solve_nmpc()
+    elif args.approach == "multi":
+        mpc.define_nlp_multi()
+        exp.solve_nmpc_multi()
+
     exp.X = convert_rh_ppm(exp.X)
+
     data = {
-        method: {
+        args.method: {
             "U": exp.U,
             "X": exp.X
         }
     }
+
     plot_control_trajectories(data, dt)
     plot_states(data, dt)
-    exp.save_data(approach)
+    exp.save_data(args.approach)
 
 if __name__ == "__main__":
     main()

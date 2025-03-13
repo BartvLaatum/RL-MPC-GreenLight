@@ -34,6 +34,8 @@ class MPC:
         self.dt = dt
         self.nlp_opts = nlp_opts
 
+        self.n_vars = nx + nu + ns
+
         # defining model dynamics
         self.F = define_model(self.nx, self.nu, self.nd, self.n_params, self.dt)
         self.constraints()
@@ -200,58 +202,91 @@ class MPC:
         self.solver_single = ca.nlpsol("solver", "ipopt", nlp, self.nlp_opts)
 
 
-
-
     def define_nlp_multi(self):
-        # Decision variables
-        U = ca.MX.sym("U", self.nu, self.Np)             # control inputs over the horizon
+        """
+        Defining the Non-linear program using CasADi.
+        """
+        # Control variables (decision variables)
+        U = ca.MX.sym("U", self.nu, self.Np)
         X = ca.MX.sym("X", self.nx, self.Np+1)             # state trajectory over the horizon
+        S = ca.MX.sym("S", self.ns, self.Np)  # Slack variables
 
-        # Parameters (initial state, disturbances, and other parameters)
+        # Parameters (initial state, disturbances, and parameters)
         X0 = ca.MX.sym("X0", self.nx)
-        D  = ca.MX.sym("D", self.nd, self.Np)
-        P  = ca.MX.sym("P", self.n_params)
+        D = ca.MX.sym("D", self.nd, self.Np)
+        P = ca.MX.sym("P", self.n_params)
+        U0 = ca.MX.sym("U0", self.nu)  # Initial control input
 
         # Initialize cost and constraints
         J = 0
-        g = []
 
-        hour_conversion = 3600 / self.dt
+        # Initialize state trajectory
+        # Xk = X0
 
-        # Initial condition constraint: ensure the first shooting node matches the initial state
+        # # Initialize c as a (n+m) vector of zeros
+        hour_conversion = 3600/self.dt
+
+        # initialize constraints
+        g =  []
+        self.lbg = []
+        self.ubg = []
+
         g.append(X[:, 0] - X0)
+        self.lbg.extend([0]*self.nx)
+        self.ubg.extend([0]*self.nx)
 
-        # Loop over prediction horizon for dynamics and cost
+        g.append(U[:, 0] - U0)
+        self.lbg.extend(-self.du_max)
+        self.ubg.extend(self.du_max)
+
+        # Loop over prediction horizon
         for k in range(self.Np):
             Uk = U[:, k]
             Dk = D[:, k]
 
-            # Integrate dynamics from current state shooting node
+            if k > 0:
+                g.append(Uk - U[:, k-1])
+                self.lbg.extend(-self.du_max)
+                self.ubg.extend(self.du_max)
+
+            # Integrate to get the next state
             res = self.F(x0=X[:, k], u=Uk, p=ca.vertcat(Dk, P))
             X_next = res["xf"]
 
             # Add dynamic constraints: the next state decision variable must equal the integration result
             g.append(X[:, k+1] - X_next)
+            self.lbg.extend([0]*self.nx)
+            self.ubg.extend([0]*self.nx)
 
-            # Accumulate stage cost
-            J += 0.09 * P[108] * 1e-3 * Uk[0] / hour_conversion + \
-                0.2  * P[172] * 1e-3 * Uk[4] / hour_conversion + \
-                0.3  * Uk[1] * 1e-6 * self.dt
+            # economic objective
+            # convert boil power to kWh (costs for heating)
+            # convert lamp electricity to kWh (costs for lighting)
+            J += 0.09 * P[108] *1e-3 * Uk[0]/hour_conversion + \
+                0.2 * P[172] * 1e-3 * Uk[4]/hour_conversion + \
+                0.3 * Uk[1] * 1e-6 * self.dt                        # costs for CO2
 
-        # Terminal cost: revenue from selling tomatoes (using the final state shooting node)
-        J += - (X[25, self.Np] - X0[25]) * 1e-6 / 0.08 * 1.2
+            S, S_constraints, S_lbg, S_ubg = self.set_slack_variables(k, X_next, S)
+            g.extend(S_constraints)
+            self.lbg.extend(S_lbg)
+            self.ubg.extend(S_ubg)
 
-        # Concatenate decision variables (stacking state and control trajectories)
-        w = ca.vertcat(ca.vec(X), ca.vec(U))
+            J += ca.sum1(S[:, k])
 
-        # Concatenate constraints into a single vector
+        J += - (X[25, -1] - X0[25]) * 1e-6 / 0.08 * 1.2              # revenue from selling tomatoes
+
+        # Decision variables
+        w = ca.vertcat(ca.vec(U), ca.vec(X), ca.vec(S))
+
+        # Constraints (empty if no constraints)
         g_all = ca.vertcat(*g)
 
-        # Parameters for the NLP (initial state, disturbances, parameters)
-        p_nlp = ca.vertcat(X0, ca.vec(D), P)
+        # Parameters for NLP
+        p_nlp = ca.vertcat(X0, U0, ca.vec(D), P)
 
         # Define the NLP problem
-        nlp = {"x": w, "f": J, "g": g_all, "p": p_nlp}
+        nlp = {'x': w, 'f': J, 'g': g_all, 'p': p_nlp}
 
-        # Create and store the solver
-        self.solver = ca.nlpsol("solver", "ipopt", nlp, self.nlp_opts)
+        # Create solver options
+
+        # Create solver
+        self.solver_multi = ca.nlpsol("solver", "ipopt", nlp, self.nlp_opts)
