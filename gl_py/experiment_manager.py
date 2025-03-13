@@ -231,8 +231,7 @@ class Experiment:
         w_init = np.concatenate([u_init.T.flatten(), x_init.T.flatten(), s_init.T.flatten()])
 
         times = []
-        # for ll in range(self.N):
-        for ll in range(2):
+        for ll in range(self.N):
             print(f"Solving for timestep: {ll}")
             t = time.time()
             reshape_d = np.concatenate(self.d_values[ll:ll+self.mpc.Np, :])
