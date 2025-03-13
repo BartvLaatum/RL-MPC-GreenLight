@@ -1,7 +1,8 @@
+from typing import Any, Dict
+
 import casadi as ca
 import numpy as np
 
-import plot_config
 
 # from model.aux_states import update
 # from model.ode import ODE
@@ -21,6 +22,7 @@ class MPC:
         nd: int,
         dt: float,
         Np: int,
+        nlp_opts: Dict[str, Any],
     ):
         self.nx = nx
         self.nu = nu
@@ -28,6 +30,7 @@ class MPC:
         self.nd = nd
         self.Np = Np
         self.dt = dt
+        self.nlp_opts = nlp_opts
 
         # defining model dynamics
         self.F = define_model(self.nx, self.nu, self.nd, self.n_params, self.dt)
@@ -93,18 +96,11 @@ class MPC:
         nlp = {'x': w, 'f': J, 'g': g_all, 'p': p_nlp}
 
         # Create solver options
-        nlp_opts = {}
-        nlp_opts["ipopt.print_level"] = 1
-        nlp_opts["ipopt.max_iter"] = 5000
-        nlp_opts["ipopt.tol"] = 1e-4
-        nlp_opts["ipopt.acceptable_tol"] = 1e-4
-        nlp_opts["print_time"] = True
-        # nlp_opts["ipopt.jacobian_approximation"] = "finite-difference-values"
-        # nlp_opts["ipopt.hessian_approximation"] = "limited-memory"
-        nlp_opts["ipopt.linear_solver"] = "ma57"
 
         # Create solver
-        self.solver = ca.nlpsol("solver", "ipopt", nlp, nlp_opts)
+        self.solver_single = ca.nlpsol("solver", "ipopt", nlp, self.nlp_opts)
+
+
 
 
     def define_nlp_multi(self):
@@ -158,17 +154,5 @@ class MPC:
         # Define the NLP problem
         nlp = {"x": w, "f": J, "g": g_all, "p": p_nlp}
 
-        # Set solver options
-        nlp_opts = {}
-        nlp_opts["ipopt.print_level"] = 2
-        nlp_opts["ipopt.max_iter"] = 1000
-        nlp_opts["ipopt.tol"] = 1e-4
-        nlp_opts["ipopt.acceptable_tol"] = 1e-4
-        nlp_opts["print_time"] = False
-        # nlp_opts["ipopt.jacobian_approximation"] = "finite-difference-values"
-        # nlp_opts["ipopt.hessian_approximation"] = "limited-memory"
-        nlp_opts["print_time"] = True
-        nlp_opts["ipopt.linear_solver"] = "ma57"
-
         # Create and store the solver
-        self.solver = ca.nlpsol("solver", "ipopt", nlp, nlp_opts)
+        self.solver = ca.nlpsol("solver", "ipopt", nlp, self.nlp_opts)

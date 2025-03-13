@@ -1,11 +1,11 @@
 import numpy as np
 import casadi as ca
 import os
+import time
 
 from mpc import MPC
 from model.utils import load_dummy_weather, init_state
 from model.parameters import init_default_params
-import matplotlib.pyplot as plt
 
 class Experiment:
     def __init__(
@@ -34,14 +34,14 @@ class Experiment:
         self.p = init_default_params(mpc.n_params)
         # self.plot_weather()
 
-    def get_init(self, ll):
+    def get_init(self, ll, U_init=None):
         # Retrieve dimensions
         nx = self.mpc.nx
         nu = self.mpc.nu
         Np = self.mpc.Np
-
         # Initial guess for control inputs
-        U_init = 0.5 * np.ones((nu, Np))
+        if U_init is None:
+            U_init = 0.5 * np.ones((nu, Np))
 
         # Build an initial guess for the state trajectory by propagating X0.
         X_init = np.zeros((nx, Np+1))
@@ -62,6 +62,8 @@ class Experiment:
             X_next = res["xf"].full().flatten()
             X_init[:, k+1] = X_next
 
+        print(X_init.T.flatten().shape)
+        print(U_init.T.flatten().shape)
         # Now, form the overall decision vector initial guess by concatenating X_init and U_init.
         w_init = np.concatenate([X_init.T.flatten(), U_init.T.flatten()])
         return w_init
@@ -96,7 +98,7 @@ class Experiment:
             # Set up constraints bounds
             g_min = []  # Lower bounds on constraints
             g_max = []  # Upper bounds on constraints
-            solution = self.mpc.solver(
+            solution = self.mpc.solver_single(
                 x0=ca.DM(w_init),
                 lbx=ca.DM(w_min),
                 ubx=ca.DM(w_max),
@@ -107,12 +109,59 @@ class Experiment:
             # Extract the optimal control inputs from the solution
             w_opt = solution["x"].full().flatten().reshape(self.mpc.Np, self.mpc.nu).T  # Convert to a NumPy array
             self.U[:, ll+1] = w_opt[:, 0]
-            w_init = w_opt.flatten()
+            w_init = w_opt.T.flatten()
+            w_init = np.concatenate([w_init[self.mpc.nu:], w_init[-self.mpc.nu:]])
             res = self.mpc.F(x0=self.X[:,ll], u=self.U[:, ll+1], p=ca.vertcat(*[reshape_d[:self.mpc.nd], self.p]))
             self.X[:, ll+1] = res["xf"].toarray().ravel()
 
-        self.plot_control_trajectories(self.U, self.mpc.dt)
-        self.plot_states(self.X, self.mpc.dt)
+    # def get_init_multi(self, ll, U_init=None):
+    #     print("obtaining single shooting guess")
+        
+    #     # Retrieve dimensions
+    #     nx = self.mpc.nx
+    #     nu = self.mpc.nu
+    #     Np = self.mpc.Np
+        
+    #     w_min = [0.0] * (self.mpc.nu * self.mpc.Np)   # Lower bounds
+    #     w_max = [1.0] * (self.mpc.nu * self.mpc.Np)   # Upper bounds
+
+    #     w_init = np.ones((self.mpc.nu*self.mpc.Np))*0.5
+    #     g_min = []  # Lower bounds on constraints
+    #     g_max = []  # Upper bounds on constraints
+    #     reshape_d = np.concatenate(self.d_values[ll:ll+self.mpc.Np, :])
+    #     p_all = ca.vertcat(self.X[:, ll], reshape_d, self.p)
+
+    #     solution = self.mpc.solver_single(
+    #         x0=ca.DM(w_init),
+    #         lbx=ca.DM(w_min),
+    #         ubx=ca.DM(w_max),
+    #         lbg=ca.DM(g_min),
+    #         ubg=ca.DM(g_max),
+    #         p=p_all
+    #     )
+
+    #     U_init = solution["x"].full().flatten().reshape(self.mpc.Np, self.mpc.nu).T  # Convert to a (Np, nu) array
+
+    #     X_init = np.zeros((nx, Np+1))
+    #     # Set the initial state from the current state at time ll.
+    #     X_init[:, 0] = self.X[:, ll]  # assuming self.X[:, ll] is a numpy array
+
+    #     # Propagate the dynamics using the initial guess for controls.
+    #     for k in range(Np):
+    #         # Use the k-th control guess
+    #         u_k = U_init[:, k]
+    #         # Use the k-th disturbance from d_values (ensure proper shape)
+    #         D_k = self.d_values[ll + k, :]  
+    #         # Build the parameter vector for F as: [D_k; self.p]
+    #         p_dyn = ca.vertcat(ca.DM(D_k), self.p)
+    #         # Propagate the state: note that F returns a dictionary with key "xf"
+    #         res = self.mpc.F(x0=ca.DM(X_init[:, k]), u=ca.DM(u_k), p=p_dyn)
+    #         # Extract the next state; convert to a 1D NumPy array.
+    #         X_next = res["xf"].full().flatten()
+    #         X_init[:, k+1] = X_next
+
+    #     w_init = np.concatenate([X_init.T.flatten(), U_init.T.flatten()])
+    #     return w_init
 
     def solve_nmpc_multi(self):
         """
@@ -130,10 +179,18 @@ class Experiment:
             np.ndarray: the gradient of the cost function
             np.ndarray: the hessian of the cost function
         """
+        # Retrieve dimensions
+        nx = self.mpc.nx
+        nu = self.mpc.nu
+        Np = self.mpc.Np
+
+        times = []
         # initial guess for the decision vector
         w_init = self.get_init(0)
 
         for ll in range(self.N):
+        # for ll in range (10):
+            t = time.time()
             print(f"Solving for timestep: {ll}")
             # Build the disturbance vector for the prediction horizon.
             reshape_d = np.concatenate(self.d_values[ll:ll+self.mpc.Np, :], axis=0)
@@ -141,11 +198,6 @@ class Experiment:
             # The parameter vector now must include the current state, the disturbances over the horizon, and other parameters.
             # The NLP was defined with p = [X0; vec(D); P], where X0 is the current state.
             p_all = ca.vertcat(self.X[:, ll], reshape_d, self.p)
-
-            # Retrieve dimensions
-            nx = self.mpc.nx
-            nu = self.mpc.nu
-            Np = self.mpc.Np
 
             # --- Bounds for Decision Variables ---
             # For states, if there are no explicit state bounds, we use large numbers.
@@ -186,133 +238,57 @@ class Experiment:
 
             # Apply the first control input to the system.
             self.U[:, ll+1] = U_opt[:, 0]
-            # Update the state using the predicted state from the multiple-shooting trajectory.
-            # self.X[:, ll+1] = X_opt[:, 1]
-            res = self.mpc.F(x0=self.X[:,ll], u=self.U[:, ll+1], p=ca.vertcat(*[reshape_d[:self.mpc.nd], self.p]))
-            self.X[:, ll+1] = res["xf"].toarray().ravel()
 
-            self.plot_control_trajectories(U_opt, self.mpc.dt)
-            self.plot_states(X_opt, self.mpc.dt)
+            # Update the state using the predicted state from the multiple-shooting trajectory.
+            res = self.mpc.F(x0=self.X[:,ll], u=self.U[:, ll+1], p=ca.vertcat(*[reshape_d[:self.mpc.nd], self.p]))
+
+            self.X[:, ll+1] = res["xf"].toarray().ravel()
 
             # Update the initial guess for the next iteration.
             w_init = np.concatenate(
                 [
-                    np.hstack((X_opt[:, 1:], X_opt[:, -1].reshape(self.mpc.nx, -1))).T.flatten(), \
-                    np.hstack((U_opt[:, 1:], U_opt[:, -1].reshape(self.mpc.nu, -1))).flatten(),
+                    self.X[:, ll+1].T.flatten(),
+                    w_opt[nx:nx*(Np+1)],
+                    w_opt[nx*(Np+1)+nu:],
+                    w_opt[-nu:],
                 ]
             )
+            # breakpoint()
+            times.append(time.time()-t)
+
+        print(f"Average solver time per iteration: {np.mean(times)} (s)")
+        # self.plot_control_trajectories(self.U, self.mpc.dt)
+        # self.plot_states(self.X, self.mpc.dt)
 
             # Optionally, one could extract additional solver outputs (e.g., cost, gradients, etc.)
             # cost_value = solution["f"]
             # constraints = solution["g"]
             # Additional outputs could be processed as needed.
 
-    def save_data(self):
+
+    def save_data(self, approach):
         """Save the data to a file."""
-        dir = f"results/{self.method}/{self.month}"
+        dir = f"results/{self.method}/{approach}/{self.month}"
         os.makedirs(dir, exist_ok=True)
-        np.savetxt(f"{dir}/multi-control-inputs-{self.mpc.dt}dt.csv", self.U.T, delimiter=",")
-        np.savetxt(f"{dir}/multi-states-{self.mpc.dt}dt.csv", self.X.T, delimiter=",")
+        np.savetxt(f"{dir}/control-inputs-{int(self.mpc.dt)}dt.csv", self.U.T, delimiter=",")
+        np.savetxt(f"{dir}/states-{int(self.mpc.dt)}dt.csv", self.X.T, delimiter=",")
 
-    def plot_control_trajectories(self, U, dt):
-        """Plot the optimized control trajectories."""
-        control_labels_with_units = {
-            0: r"$u_{heat}$",
-            1: r"$u_{CO_2}$",
-            2: r"$u_{ThScr}$",
-            3: r"$u_{vent}$",
-            4: r"$u_{light}$",
-            5: r"$u_{BlScr}$",
-        }
-        WIDTH = 175 * 0.03937
-        HEIGHT = WIDTH * 0.75
-
-        fig, axes = plt.subplots(3, 2, figsize=(WIDTH, HEIGHT), dpi=180, sharex=True, sharey=True)
-
-        t = np.arange(0, U.shape[-1]*self.mpc.dt, self.mpc.dt)/86400
-
-        axes[0,0].step(t[:-1], U[0, 1:], color="C0", where='post')
-        axes[0,1].step(t[:-1], U[1, 1:], color="C1", where='post')
-        axes[1,0].step(t[:-1], U[2, 1:], color="C2", where='post')
-        axes[1,1].step(t[:-1], U[3, 1:], color="C3", where='post')
-        axes[2,0].step(t[:-1], U[4, 1:], color="C4", where='post')
-        axes[2,1].step(t[:-1], U[5, 1:], color="C5", where='post')
-
-        for i, ax in enumerate(axes.flat):
-            ax.set_ylabel(control_labels_with_units[i])
-
-        fig.supxlabel('Time (days)')
-        fig.supylabel('Control Input')
-        fig.suptitle('Closed-loop Control Trajectories')
-        fig.tight_layout()
-        plt.show()
-        # fig.savefig(f"figures/{self.method}/{self.month}/control-inputs-{int(self.mpc.dt)}dt.png")
-
-    def plot_states(self, X, dt):
-        """Plot the optimized control trajectories."""
-        state_labels_with_units = {
-            0: r"Air Temperature ($^\circ$C)",
-            1: r"CO$_2$ (mg/m$^3$)",
-            2: r"Vapor Pressure (Pa)",
-            3: r"Fruit Weight (DM mg/m$^2$)"
-        }
-        WIDTH = 175 * 0.03937
-        HEIGHT = WIDTH * 0.75
-
-        fig, axes = plt.subplots(2, 2, figsize=(WIDTH, HEIGHT), dpi=180, sharex=True)
-
-        t = np.arange(0, X.shape[-1]*self.mpc.dt, dt)/86400
-
-        axes[0,0].step(t, X[2,:], color="C0", where='post')
-        axes[0,1].step(t, X[0, :], color="C0", where='post')
-        axes[1,0].step(t, X[15, :], color="C0", where='post')
-        axes[1,1].step(t, X[25, :], color="C0", where='post')
-
-        for i, ax in enumerate(axes.flat):
-            ax.set_ylabel(state_labels_with_units[i])
-
-        fig.supxlabel('Time (days)')
-        fig.supylabel('State variable')
-        fig.suptitle('Closed-loop State Trajectories')
-        fig.tight_layout()
-        plt.show()
-        # fig.savefig(f"figures/{self.method}/{self.month}/states-{int(self.mpc.dt)}dt.png")
-        # plt.show()
-
-    # def plot_weather(self,):
-    #     """Plot the optimized control trajectories."""
-    #     state_labels_with_units = {
-    #         0: r"Global Radiation (W/m$^2$)",
-    #         1: r"Air Temperature ($^\circ$C)",
-    #         2: r"CO$_2$ (mg/m$^3$)",
-    #         3: r"Vapor Pressure (Pa)",
-    #         4: r"Wind Speed (m/s)",
-    #         5: r"Sky Temperature ($^\circ$C)",
-    #     }
-    #     WIDTH = 175 * 0.03937
-    #     HEIGHT = WIDTH * 0.75
-
-    #     fig, axes = plt.subplots(3, 2, figsize=(WIDTH, HEIGHT), dpi=180, sharex=True)
-
-    #     t = np.arange(0, self.N*self.mpc.dt, self.mpc.dt)/86400
-
-    #     axes[0,0].step(t, self.d_values[:self.N, 0], color="C0", where='post')
-    #     axes[0,1].step(t, self.d_values[:self.N, 1], color="C0", where='post')
-    #     axes[1,0].step(t, self.d_values[:self.N, 2], color="C0", where='post')
-    #     axes[1,1].step(t, self.d_values[:self.N, 3], color="C0", where='post')
-    #     axes[2,0].step(t, self.d_values[:self.N, 4], color="C0", where='post')
-    #     axes[2,1].step(t, self.d_values[:self.N, 5], color="C0", where='post')
-
-    #     for i, ax in enumerate(axes.flat):
-    #         ax.set_ylabel(state_labels_with_units[i])
-
-    #     fig.supxlabel('Time (days)')
-    #     fig.supylabel('Variable')
-    #     fig.suptitle('Weather disturbance')
-    #     fig.tight_layout()
-    #     fig.savefig(f"figures/{self.method}/{self.month}/weather-{int(self.mpc.dt)}dt.png")
-    #     # plt.show()
-
+def solver_opts(method):
+    nlp_opts = {}
+    nlp_opts["ipopt.print_level"] = 0
+    nlp_opts["ipopt.warm_start_init_point"] = "yes"
+    nlp_opts["ipopt.max_iter"] = 5000
+    nlp_opts["ipopt.tol"] = 1e-4
+    nlp_opts["ipopt.acceptable_tol"] = 1e-4
+    nlp_opts["print_time"] = True
+    nlp_opts["ipopt.linear_solver"] = "ma57"
+    if method == "finite-difference":
+        nlp_opts["ipopt.jacobian_approximation"] = "finite-difference-values"
+        nlp_opts["ipopt.hessian_approximation"] = "limited-memory"
+    elif method == "exact":
+        nlp_opts["ipopt.jacobian_approximation"] = "exact"
+        nlp_opts["ipopt.hessian_approximation"] = "exact"
+    return nlp_opts
 
 def main():
     n_params = 208
@@ -320,17 +296,19 @@ def main():
     nu = 6
     nd = 7
     dt = 300.
-    n_days = 0.1
+    n_days = 1
     month = "june"
     Np = 12
+    method = "finite-difference"
+    approach = "multiple"
 
-    method = "exact"
+    nlp_opts = solver_opts(method)
 
-    mpc = MPC(nx, nu, n_params, nd, dt, Np)
+    mpc = MPC(nx, nu, n_params, nd, dt, Np, nlp_opts)
     mpc.define_nlp_multi()
     exp = Experiment(mpc, month, n_days, method)
     exp.solve_nmpc_multi()
-    exp.save_data()
+    exp.save_data(approach)
 
 if __name__ == "__main__":
     main()

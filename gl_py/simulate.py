@@ -21,9 +21,7 @@ p = init_default_params(n_params)
 F = define_model(nx, nu, nd, n_params, dt)
 
 X[:, 0] = x0
-print(controls)
-controls = np.ones((N, nu))*0.5
-for i, u in enumerate(controls[1:13]):
+for i, u in enumerate(controls):
     res= F(x0=X[:, i], u=u, p=ca.vertcat(weather[i], p))
     X[:, i+1] = res["xf"].full().flatten()
 
