@@ -9,7 +9,7 @@ import casadi as ca
 from mpc import MPC
 from model.utils import load_dummy_weather, init_state, convert_rh_ppm
 from model.parameters import init_default_params
-from visualizations.trajectories import plot_control_trajectories, plot_states
+# from visualizations.trajectories import plot_control_trajectories, plot_states
 
 class Experiment:
     def __init__(
@@ -303,7 +303,7 @@ def solver_opts(method):
 
     elif method == "exact":
         nlp_opts["ipopt.jacobian_approximation"] = "exact"
-        nlp_opts["ipopt.hessian_approximation"] = "exact"
+        nlp_opts["ipopt.hessian_approximation"] = "limited-memory"
     return nlp_opts
 
 def main():
@@ -345,8 +345,8 @@ def main():
         }
     }
 
-    plot_control_trajectories(data, dt)
-    plot_states(data, dt)
+    # plot_control_trajectories(data, dt)
+    # plot_states(data, dt)
     exp.save_data(args.approach)
 
 if __name__ == "__main__":
