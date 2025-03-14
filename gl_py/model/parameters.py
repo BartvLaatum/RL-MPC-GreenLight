@@ -133,7 +133,7 @@ def init_default_params(n_params):
     params[105] = 51e-3      # phiPipeE     External diameter of the heating pipes [m]
     params[106] = (51e-3)-(2.25e-3)        # phiPipeI        Internal diameter of the heating pipes [m]
     params[107] = 1.3375        # lPipe           Length of the heating pipes [m]
-    params[108] = 44.*params[46]          # pBoil           Max energy input from boiler into the heating system [W/m2]
+    params[108] = 44.*params[46]          # pBoil           Max energy input from boiler into the heating system [W]
 
     params[109] = 720        # phiExtCo2       Capacity of external CO2 source [mg m-2 s-1]
     # capPipe Heat capacity of the heating pipes [J m-2 K-1]

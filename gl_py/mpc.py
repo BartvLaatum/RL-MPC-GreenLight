@@ -71,21 +71,29 @@ class MPC:
 
             Xk = res['xf']
             z = ca.vertcat(Xk, Uk)
+            
+            # Add air temp inequality constraints
+            g   += []    
+            # g   += [Xk[2]]    
 
             # economic objective
             # convert boil power to kWh (costs for heating)
             # convert lamp electricity to kWh (costs for lighting)
-            J += 0.09 * P[108] *1e-3 * Uk[0]/hour_conversion + \
-                0.2 * P[172] * 1e-3 * Uk[4]/hour_conversion + \
-                0.3 * Uk[1] * 1e-6 * self.dt                        # costs for CO2
+            # J += 0.09 * P[108] *1e-3 * Uk[0]/hour_conversion + \
+            #     0.2 * P[172] * 1e-3 * Uk[4]/hour_conversion + \
+            #     0.3 * Uk[1] * 1e-6 * self.dt                        # costs for CO2
+            J += 0.09 * P[108]/P[46] *1e-3 * Uk[0]/hour_conversion + \
+                0.09 * P[172] * 1e-3 * Uk[4]/hour_conversion + \
+                0.1 * Uk[1]* P[109] * 1e-6 * self.dt                        # costs for CO2
 
-        J += - (Xk[25]-X0[25])* 1e-6 / 0.08 * 1.2              # revenue from selling tomatoes
+        # J += - (Xk[25]-X0[25])* 1e-6 / 0.08 * 1.2              # revenue from selling tomatoes
+        J += - (Xk[25]-X0[25])/0.06 * 1e-6 * 1.2              # revenue from selling tomatoes = (mg m^{-2}) * 10^{-6} * m^{2} * euro/kg 
 
         # Decision variables
         w = ca.vec(U)
 
         # Constraints (empty if no constraints)
-        g_all = ca.vertcat(g)
+        g_all = ca.vertcat(*g)
 
         # Parameters for NLP
         p_nlp = ca.vertcat(X0, ca.vec(D), P)

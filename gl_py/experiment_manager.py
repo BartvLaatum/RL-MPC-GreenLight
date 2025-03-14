@@ -71,7 +71,8 @@ class Experiment:
             # Set up constraints bounds
             g_min = []  # Lower bounds on constraints
             g_max = []  # Upper bounds on constraints
-            
+            # g_min = [0]*self.mpc.Np  # Lower bounds on constraints
+            # g_max = [22]*self.mpc.Np  # Upper bounds on constraints
             # Start timing
             start_time = time.time()
             
@@ -95,7 +96,18 @@ class Experiment:
             self.U[:, ll+1] = w_opt[:, 0]
             # Set up initial guess for the next iteration
             w_init = np.hstack((w_opt[:,1:],w_opt[:,w_opt.shape[1]-1].reshape(-1,1))).flatten(order='F').tolist()
+            ##################################
+            # x_0 = self.X[:,ll]
+            # x_cl = np.zeros((28,self.mpc.Np+1))
+            # x_cl[:,0] = x_0
+            # for jj in range(self.mpc.Np):
+            #     x_cl[:,jj+1] = self.mpc.F(x0=x_0, u=w_opt[:, jj], p=ca.vertcat(*[self.d_values[ll+jj, :].T, self.p]))['xf'].full().flatten()
+            #     x_0 = x_cl[:,jj+1]
+                
+            # print("Yield Rev: ", -(x_cl[25,-1]-x_cl[25,0])/0.06*1e-6*self.p[46]*1.2)
+            # print("Heat Cost: ", 0.09*self.p[108]*1e-3*300/3600*np.sum(w_opt[0,:]))
             
+            ###################################
             res = self.mpc.F(x0=self.X[:,ll], u=self.U[:, ll+1], p=ca.vertcat(*[reshape_d[:self.mpc.nd], self.p]))
             self.X[:, ll+1] = res["xf"].toarray().ravel()
         print(f"Mean execution time: {np.mean(self.exectime[0, :]):.6f} seconds")  
@@ -216,8 +228,8 @@ def main():
     nd = 7
     dt = 300.
     n_days = 1.
-    month = "june" #"january" #
-    Np = 12
+    month = "january" #"january" #
+    Np = 12*12
 
     method =  "finite-differences" #"exact"
 
