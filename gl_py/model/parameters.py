@@ -135,7 +135,7 @@ def init_default_params(n_params):
     params[107] = 1.3375        # lPipe           Length of the heating pipes [m]
     params[108] = 44.*params[46]          # pBoil           Max energy input from boiler into the heating system [W]
 
-    params[109] = 720        # phiExtCo2       Capacity of external CO2 source [mg m-2 s-1]
+    params[109] = 720        # phiExtCo2       Capacity of external CO2 source [mg s-1]
     # capPipe Heat capacity of the heating pipes [J m-2 K-1]
     params[110] = 0.25 * np.pi * params[107] * ((params[105] * params[105] - params[106] * params[106]) * params[12] * params[24] + params[106] * params[106] * params[13] * params[25]) 
 
