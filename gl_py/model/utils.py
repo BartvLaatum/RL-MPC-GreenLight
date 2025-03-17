@@ -15,7 +15,7 @@ def define_model(nx: int, nu: int, nd: int, n_params: int, dt: float):
     dxdt = ODE(x, u, d, p)
     input_args_sym = ca.vertcat(d, p)
 
-    int_opts = {"abstol": 1e-6, "reltol": 1e-6}
+    int_opts = {"abstol": 1e-4, "reltol": 1e-4, "max_num_steps": 7e4}
     # int_opts = {}
     F = ca.integrator(
         "F", "cvodes",
@@ -37,7 +37,7 @@ def cond(hec, vp1, vp2):
     a = 6.4e-9
     return 1.0 / (1.0 + np.exp(-0.1 * (vp1 - vp2))) * a * hec * (vp1 - vp2)
 
-def co2dens2ppm_cpp(temp, dens):
+def co2dens2ppm(temp, dens):
     """Convert CO2 density to CO2 concentration [ppm]"""
     R = 8.3144598        # Molar gas constant [J mol^{-1} K^{-1}]
     C2K = 273.15         # Conversion from Celsius to Kelvin [K]
@@ -118,3 +118,47 @@ def load_dummy_weather(N, dt, month='june'):
         weather_data = []
     return weather_data
 
+def vaporDens2rh(temp, vaporDens):
+
+    # constants
+    R = 8.3144598 # molar gas constant [J mol^{-1} K^{-1}]
+    C2K = 273.15 # conversion from Celsius to Kelvin [K]
+    Mw = 18.01528e-3 # molar mass of water [kg mol^-{1}]
+
+    # parameters used in the conversion
+    c = np.array([610.78, 238.3, 17.2694, -6140.4, 273, 28.916])
+    
+    satP = c[0]*np.exp(c[2]*np.divide(temp,(temp+c[1]))) 
+    # Saturation vapor pressure of air in given temperature [Pa]
+
+    # convert to relative humidity using the ideal gas law pV=nRT => n=pV/RT 
+    # so n=p/RT is the number of moles in a m^3, and Mw*n=Mw*p/(R*T) is the 
+    # number of kg in a m^3, where Mw is the molar mass of water.    
+    rh = np.divide(100*R*(temp+C2K),(Mw*satP))*vaporDens
+
+    return rh
+
+def satVp(temp):
+    # saturated vapor pressure (Pa) at temperature temp (�C)
+    # Calculation based on 
+    #   http://www.conservationphysics.org/atmcalc/atmoclc2.pdf
+    # See also file atmoclc2.pdf
+
+    # parameters used in the conversion
+    # p = [610.78 238.3 17.2694 -6140.4 273 28.916];
+        # default value is [610.78 238.3 17.2694 -6140.4 273 28.916]
+
+        # Saturation vapor pressure of air in given temperature [Pa]
+    return 610.78* np.exp(17.2694*temp/(temp+238.3))
+
+
+def vaporPres2rh(temp, vaporPres):
+    return ca.fmin(100*vaporPres/satVp(temp), 100)
+
+def convert_rh_ppm(X: np.ndarray) -> np.ndarray:
+    """
+    
+    """
+    X[0, : ] = co2dens2ppm(X[2, :], X[0, :]*1e-6)
+    X[15, :] = vaporPres2rh(X[2, :], X[15, :]).toarray().ravel()
+    return X
