@@ -96,7 +96,7 @@ class Experiment:
             print(f"Solving for timestep: {ll}")
             reshape_d = np.concatenate(self.d_values[ll:ll+self.mpc.Np, :])
             p_all = ca.vertcat(self.X[:, ll], reshape_d, self.p)
-
+            start_time = time.time()
             # Set up initial guess and bounds for decision variables
             # Set up constraints bounds
             g_min = []  # Lower bounds on constraints
