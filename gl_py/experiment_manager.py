@@ -7,6 +7,8 @@ from mpc import MPC
 from model.utils import load_dummy_weather, init_state
 from model.parameters import init_default_params
 
+import time
+
 class Experiment:
     def __init__(
             self,
@@ -22,6 +24,7 @@ class Experiment:
         self.t = np.arange(0, self.L, mpc.dt)
         self.N = len(self.t)
         self.method = method
+        self.exectime = np.zeros((1, self.N))
         # Load or define your disturbance trajectory
         self.d_values = load_dummy_weather(self.N+mpc.Np, mpc.dt, month=month)
 
@@ -106,6 +109,13 @@ class Experiment:
                 ubg=ca.DM(g_max),
                 p=p_all
             )
+            
+            # End timing
+            end_time = time.time()
+            self.exectime[0, ll] = end_time - start_time
+            # Print execution time
+            print(f"Execution time: {self.exectime[0, ll]:.6f} seconds")
+            print("EXIT status:\033[42m", self.mpc.solver.stats()['return_status'],"\033[0m \n")
             # Extract the optimal control inputs from the solution
             w_opt = solution["x"].full().flatten().reshape(self.mpc.Np, self.mpc.nu).T  # Convert to a NumPy array
             self.U[:, ll+1] = w_opt[:, 0]
