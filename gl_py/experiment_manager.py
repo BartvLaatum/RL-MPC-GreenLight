@@ -402,7 +402,7 @@ def main():
     ns = 6
     nd = 7
     dt = 300.
-    n_days = 0.1
+    n_days = 1
     month = "june"
     Np = 12
 
@@ -428,10 +428,11 @@ def main():
             "X": exp.X
         }
     }
-    cs_suffix = "-cs"
-    plot_control_trajectories(data, args.approach,dt, cs_suffix)
-    plot_states(data, args.approach, dt, cs_suffix)
-    # exp.save_data(args.approach)
+
+    # plot_control_trajectories(data, args.approach,dt, None)
+    # plot_states(data, args.approach, dt, None)
+
+    exp.save_data(args.approach)
 
 if __name__ == "__main__":
     main()
