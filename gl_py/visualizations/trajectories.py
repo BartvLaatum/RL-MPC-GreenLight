@@ -3,7 +3,7 @@ import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 
-import visualizations.plot_config
+import plot_config
 
 def plot_control_trajectories(data, approach, dt, cs_suffix):
     """Plot the optimized control trajectories."""
@@ -39,8 +39,8 @@ def plot_control_trajectories(data, approach, dt, cs_suffix):
     fig.supylabel('Control Input')
     fig.suptitle('Closed-loop Control Trajectories')
     fig.tight_layout()
-    # plt.show()
-    fig.savefig(f"figures/exact-finite/{approach}/{month}/control-inputs{cs_suffix}-{int(dt)}dt.png")
+    plt.show()
+    # fig.savefig(f"figures/exact-finite/{month}/control-inputs{cs_suffix}-{int(dt)}dt.png")
 
 def plot_states(data, approach, dt, cs_suffix):
     """Plot the optimized control trajectories."""
@@ -82,8 +82,8 @@ def plot_states(data, approach, dt, cs_suffix):
     fig.supylabel('State variable')
     fig.suptitle('Closed-loop State Trajectories')
     fig.tight_layout()
-    # plt.show()
-    fig.savefig(f"figures/exact-finite/{approach}/{month}/states{cs_suffix}-{int(dt)}dt.png")
+    plt.show()
+    # fig.savefig(f"figures/exact-finite/{month}/states{cs_suffix}-{int(dt)}dt.png")
 
 def load_data(methods, approach, month, cs_suffix):
     """Load the data from the CSV files."""
@@ -94,14 +94,17 @@ def load_data(methods, approach, month, cs_suffix):
     }
 
     for method in methods:
-        
+        if method == "exact":
+            approach = "multi"
+        elif method == "finite-difference":
+            approach = "single"
         U = np.loadtxt(f"results/{method}/{approach}/{month}/control-inputs{cs_suffix}-300dt.csv", delimiter=",").T
         X = np.loadtxt(f"results/{method}/{approach}/{month}/states{cs_suffix}-300dt.csv", delimiter=",").T
         data[method] = {
             "U": U,
             "X": X
         }
-        
+
     return data
 
 if __name__ == "__main__":

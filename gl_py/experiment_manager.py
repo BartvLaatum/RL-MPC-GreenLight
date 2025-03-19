@@ -10,7 +10,7 @@ from mpc import MPC
 from model.utils import load_dummy_weather, init_state, convert_rh_ppm
 from model.parameters import init_default_params
 
-from visualizations.trajectories import plot_control_trajectories, plot_states
+# from visualizations.trajectories import plot_control_trajectories, plot_states
 
 import time
 
@@ -429,8 +429,6 @@ def main():
         }
     }
 
-    # plot_control_trajectories(data, args.approach,dt, None)
-    # plot_states(data, args.approach, dt, None)
 
     exp.save_data(args.approach)
 

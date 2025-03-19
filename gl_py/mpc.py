@@ -163,8 +163,8 @@ class MPC:
             # convert boil power to kWh (costs for heating)
             # convert lamp electricity to kWh (costs for lighting)
             J += 0.09 * P[108]/P[46] *1e-3 * Uk[0]/hour_conversion + \
-                0.09 * P[172] * 1e-3 * Uk[4]/hour_conversion + \
-                0.1 * Uk[1]* P[109] * 1e-6 * self.dt                        # costs for CO2
+                0.2 * P[172] * 1e-3 * Uk[4]/hour_conversion + \
+                0.3 * Uk[1]* P[109]/P[46] * 1e-6 * self.dt                        # costs for CO2
 
 
             S, S_constraints, S_lbg, S_ubg = self.set_slack_variables(k, Xk, S)
