@@ -401,7 +401,7 @@ def solver_opts(method):
     nlp_opts["ipopt.warm_start_init_point"] = "yes"
     nlp_opts["ipopt.max_iter"] = 1000
     nlp_opts["ipopt.tol"] = 1e-2
-    nlp_opts["ipopt.acceptable_tol"] = 1e-2
+    nlp_opts["ipopt.acceptable_tol"] = 0.1
     nlp_opts["print_time"] = False
     nlp_opts["ipopt.linear_solver"] = "ma57"
 

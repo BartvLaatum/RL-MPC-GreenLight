@@ -21,6 +21,26 @@ ACTIVATION_FN = {"ReLU": ReLU, "SiLU": SiLU, "Tanh":Tanh, "ELU": ELU}
 OPTIMIZER = {"ADAM": Adam}
 ENVS = {"TomatoEnv": TomatoEnv}
 
+def load_env(env_id, model_name, env_base_params, env_specific_params, load_path):
+    env_base_params["training"] = False
+    # Setup new environment for training
+    env = make_vec_env(
+        env_id, 
+        env_base_params, 
+        env_specific_params,
+        seed=666, 
+        n_envs=1, 
+        monitor_filename=None, 
+        vec_norm_kwargs=None,
+        eval_env=True
+    )
+    env = VecNormalize.load(join(load_path, "envs", f"{model_name}/best_vecnormalize.pkl"), env)
+    env.training = False
+    env.norm_reward = False
+
+    return env
+
+
 def make_env(env_id, rank, seed, env_base_params, env_specific_params, eval_env):
     '''
     Utility function for multiprocessed env.
@@ -90,13 +110,13 @@ def make_vec_env(
     # #     del model_params["learning_rate_scheduler"]
     # return model_params
 
-def load_model_hyperparams(algorithm: str, env_id: str) -> Dict[str, Any]:
+def load_rl_hyperparams(env_id: str, algorithm: str) -> Dict[str, Any]:
     with open(join("configs/agents/", algorithm + ".yml"), "r") as f:
         params = yaml.load(f, Loader=yaml.FullLoader)
     model_hyperparams = params[env_id]
     return model_hyperparams
 
-def load_env_params(env_id: str, path: str) -> Tuple[Dict, Dict, Dict]:
+def load_rl_env_params(env_id: str, path: str) -> Tuple[Dict, Dict, Dict]:
     '''
     Function that loads in the environment variables. 
     Returns the variables for the general parent GreenLightEnv class,
@@ -115,6 +135,20 @@ def load_env_params(env_id: str, path: str) -> Tuple[Dict, Dict, Dict]:
     env_base_params = params["GreenLightEnv"]
 
     return env_base_params, env_specific_params
+
+def load_mpc_params(env_id: str) -> Dict[str, Any]:
+    """
+    Load MPC parameters from a yaml file.
+    Arguments:
+        file_name (str): Name of the MAT file containing the MPC parameters.
+    Returns:
+        Dict[str, Any]: Dictionary of MPC parameters.
+    """    
+    # load mpc parameters
+    with open("configs/agents/mpc.yml", "r") as file:
+        mpc_params = yaml.safe_load(file)
+
+    return mpc_params[env_id]
 
 def load_sweep_config(path: str, env_id: str, algorithm: str) -> Dict[str, Any]:
     with open(join(path, algorithm + ".yml"), "r") as f:

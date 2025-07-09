@@ -1,15 +1,19 @@
+import os
+import argparse
 from typing import Any, Dict, List, Tuple
 
 import casadi as ca
 import numpy as np
 
-from gl_py.agents.mpc import MPC
+from agents.mpc import MPC
 
 from model.utils import define_model, co2dens2ppm, vaporPres2rh #, init_state, load_dummy_weather
 from stable_baselines3 import PPO, SAC
+from stable_baselines3.common.base_class import BaseAlgorithm
 
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
-from gl_py.environments.tomato_env import TomatoEnv
+from environments.tomato_env import TomatoEnv
+from common.utils import load_rl_env_params, load_mpc_params, load_rl_hyperparams, load_env
 
 GAMMA = 1.0
 ALGS = {
@@ -30,36 +34,22 @@ class RLMPC(MPC):
         dt: float,
         Np: int,
         nlp_opts: Dict[str, Any],
-        algorithm: str,
-        env_path: str,
-        rl_env_params: Dict[str, Any],
-        rl_model_path: str,
+        eval_env: DummyVecEnv,
+        model: BaseAlgorithm,
     ):
         super().__init__(nx, nu, ns, n_params, nd, dt, Np, nlp_opts)
-        self.nx = nx
-        self.nu = nu
-        self.ns = ns
-        self.n_params = n_params
-        self.nd = nd
-        self.Np = Np
-        self.dt = dt
-        self.nlp_opts = nlp_opts
+        # self.nx = nx
+        # self.nu = nu
+        # self.ns = ns
+        # self.n_params = n_params
+        # self.nd = nd
+        # self.Np = Np
+        # self.dt = dt
+        # self.nlp_opts = nlp_opts
 
-        env_norm = TomatoEnv(**rl_env_params)
-        env_norm = DummyVecEnv([lambda: env_norm])
-        env_norm = VecNormalize(
-            env_norm, 
-            norm_obs = True, 
-            norm_reward = False, 
-            clip_obs = 10.,
-            gamma=GAMMA,
-        )
-        env_norm = env_norm.load(env_path, env_norm)
-        env_norm.training = False
-
-        self.model = ALGS[algorithm].load(rl_model_path, env=self.eval_env)
-
-        self.n_vars = nx + nu + ns
+        # self.n_vars = nx + nu + ns
+        self.eval_env = eval_env
+        self.model = model
 
         # defining model dynamics
         self.F = define_model(self.nx, self.nu, self.nd, self.n_params, self.dt)
@@ -90,35 +80,37 @@ class RLMPC(MPC):
         obs_log, obs_norm_log, x_log, u_log = [],[],[],[]
         total_cost = 0
         rewards_log = []
-        
-        
-        obs = self.eval_env._get_obs()
+
+        obs = self.eval_env.env_method("_get_obs")[0]  # Get the initial observation from the environment
         obs_log.append(obs)
-        x_log.append(self.eval_env.get_numpy_state().ravel())
+        x_log.append(self.eval_env.env_method("get_state")[0])
+        obs = self.eval_env.normalize_obs(obs)
 
         # Freeze environment 
         if freeze:
-            self.eval_env.freeze() # freeze variables
+            self.eval_env.env_method("freeze") # freeze variables
 
-        done = False
-        for i in range (0, horizon):
+        terminated = False
+        for i in range(0, horizon):
 
-            # obs_norm = norm_obs(obs).toarray().squeeze(-1)
-            obs_norm = self.norm_obs_agent(obs, self.mean, self.variance).toarray().ravel()
-            action = self.actor_function(obs_norm).toarray().ravel()
-            obs, reward, done, _,info = self.eval_env.step(action)
-            x = self.eval_env.get_state()
-            
+            action, _ = self.model.predict(obs)
+            obs, reward, terminated, info = self.eval_env.step(action)
+            print(obs[0, :10])
+            x = self.eval_env.env_method("get_state")[0]
+
             total_cost += reward
             rewards_log.append(reward)
-            obs_log.append(obs)
-            obs_norm_log.append(self.norm_obs_agent(obs, self.mean, self.variance).toarray().ravel())
+            
+            # print(self.eval_env.unnormalize_obs(obs).ravel())
+            
+            obs_log.append(self.eval_env.unnormalize_obs(obs).ravel())
+            obs_norm_log.append(obs)
             x_log.append(x)
             u_log.append(obs[4:7])
-            
+
         # Unfreeze environment
         if freeze:
-            self.eval_env.unfreeze()
+            self.eval_env.env_method("unfreeze")
 
         # Store data
         log["obs"] = np.vstack(obs_log).transpose()
@@ -299,3 +291,71 @@ class RLMPC(MPC):
 
         # Create solver
         self.solver_multi = ca.nlpsol("solver", "ipopt", nlp, self.nlp_opts)
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--project", type=str, default="GL-MPC-RL")
+    parser.add_argument("--env_id", type=str, default="TomatoEnv")
+    parser.add_argument("--save_name", type=str)
+    parser.add_argument("--weather_filename", default="weather-300dt.csv", type=str)
+    parser.add_argument("--algorithm", type=str, default="ppo")
+    parser.add_argument("--model_name", type=str, default="graceful-planet-22")
+    # parser.add_argument("--use_trained_vf", action="store_true")
+    args = parser.parse_args()
+
+    load_path = f"train_data/{args.project}/{args.algorithm}/deterministic"
+    save_path = f"results/{args.project}/rlmpc"
+    os.makedirs(save_path, exist_ok=True)
+
+    rl_model_path = f"{load_path}/models/{args.model_name}/best_model.zip"
+    # vf_path = f"{load_path}/models/{args.model_name}/vf.zip"
+    env_path = f"{load_path}/envs/{args.model_name}/best_vecnormalize.pkl"
+
+    base_env_params, specific_env_params = load_rl_env_params(args.env_id, "configs/envs/")
+    mpc_params = load_mpc_params(args.env_id)
+
+    # load the RL parameters
+    hyperparameters = load_rl_hyperparams(args.env_id, args.algorithm)
+    # rl_env_params.update(env_params)
+    # eval_env = TomatoEnv(base_env_params=base_env_params, **specific_env_params)
+    # eval_env.reset(seed=666)
+    # eval_env = DummyVecEnv([lambda: eval_env])
+    # eval_env = VecNormalize(
+    #     eval_env, 
+    #     norm_obs = True, 
+    #     norm_reward = False, 
+    #     clip_obs = 10.,
+    #     gamma=GAMMA,
+    # )
+    eval_env = load_env(args.env_id, args.model_name, base_env_params, specific_env_params, load_path)
+    # eval_env = eval_env.load(env_path, eval_env)
+    # eval_env.training = False
+    eval_env.reset()
+    model = ALGS[args.algorithm].load(rl_model_path, env=eval_env)
+    n_params = 208
+    nx = 28
+    nu = 6
+    ns = 6
+    nd = 10
+    dt = 300.
+    n_days = 1
+    month = "june"
+    Np = 36
+    print(eval_env.obs_rms.mean[:10])
+    kwargs = {
+        "nx": nx,
+        "nu": nu,
+        "ns": ns,
+        "n_params": n_params,
+        "nd": nd,
+        "dt": dt,
+        "Np": Np,
+        "nlp_opts": mpc_params["nlp_opts"],
+        "eval_env": eval_env,
+        "model": model,
+    }
+
+    rl_mpc = RLMPC(**kwargs)
+    log = rl_mpc.unroll_actor()
+    from pprint import pprint
+    pprint(log["x"])

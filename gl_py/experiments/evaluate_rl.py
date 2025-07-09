@@ -9,29 +9,11 @@ from stable_baselines3 import PPO, SAC
 from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv
 
 from common.results import Results
-from common.utils import load_env_params, load_model_hyperparams, make_vec_env
+from common.utils import load_rl_env_params, load_rl_hyperparams, make_vec_env, load_env
 
 ALG = {"ppo": PPO, 
        "sac": SAC}
 
-def load_env(env_id, model_name, env_base_params, env_specific_params, load_path):
-    env_base_params["training"] = False
-    # Setup new environment for training
-    env = make_vec_env(
-        env_id, 
-        env_base_params, 
-        env_specific_params,
-        seed=666, 
-        n_envs=1, 
-        monitor_filename=None, 
-        vec_norm_kwargs=None,
-        eval_env=True
-    )
-    env = VecNormalize.load(join(load_path + "envs", f"{model_name}/best_vecnormalize.pkl"), env)
-    env.training = False
-    env.norm_reward = False
-
-    return env
 
 def evaluate(model, env):
     N = env.get_attr("N")[0]
@@ -95,8 +77,8 @@ if __name__ == "__main__":
     os.makedirs(save_dir, exist_ok=True)
 
     # load in the environment and model
-    env_base_params, env_specific_params = load_env_params(args.env_id, env_config_path)
-    model_params = load_model_hyperparams(args.algorithm, args.env_id)
+    env_base_params, env_specific_params = load_rl_env_params(args.env_id, env_config_path)
+    model_params = load_rl_hyperparams(args.algorithm, args.env_id)
     env_specific_params["uncertainty_scale"] = args.uncertainty_scale
     eval_env = load_env(args.env_id, args.model_name, env_base_params, env_specific_params, load_path)
 

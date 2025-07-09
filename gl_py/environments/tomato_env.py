@@ -14,6 +14,8 @@ from environments.utils import load_weather_data, load_dummy_weather
 from model.parameters import init_default_params
 from environments.noise import parametric_crop_uncertainty
 
+from copy import deepcopy
+
 REWARDS = {
     "GreenhouseReward": GreenhouseReward,
     "DummyReward": DummyReward
@@ -76,6 +78,42 @@ class TomatoEnv(GreenLightEnv):
 
         # initialise the reward function
         self.reward = self._init_rewards(reward_function, reward_params)
+
+    def get_state(self) -> np.ndarray:
+        """
+        Function that returns the current state of the environment.
+        The state is a concatenation of the current state and the control input.
+        """
+        return self.x
+
+    def freeze(self) -> None:
+        """
+        Function that freezes the current state of the environment.
+        This is used to save the current state of the environment for later use.
+        """
+        self.freeze_k = deepcopy(self.timestep)
+        self.freeze_x = deepcopy(self.x)
+        self.freeze_observation = deepcopy(self.obs)
+        # self.freeze_y = deepcopy(self.y)
+        self.freeze_x_prev = deepcopy(self.x_prev)
+        # self.freeze_y_prev = deepcopy(self.y_prev)
+        self.freeze_done = deepcopy(self.terminated)
+        self.freeze_u = deepcopy(self.u)
+
+    def unfreeze(self) -> None:
+        """
+        Function that unfreezes the current state of the environment.
+        This is used to restore the state of the environment after it has been frozen.
+        """
+        self.timestep       = deepcopy(self.freeze_k)
+        self.x              = deepcopy(self.freeze_x)
+        self.x_prev         = deepcopy(self.freeze_x_prev)
+        self.obs            = deepcopy(self.freeze_observation)
+        # self.y              = deepcopy(self.freeze_y)
+        # self.y_prev         = deepcopy(self.freeze_y_prev)
+        self.done           = deepcopy(self.freeze_done)
+        self.u              = deepcopy(self.freeze_u)
+
 
     def _terminalState(self) -> bool:
         """

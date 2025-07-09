@@ -15,7 +15,7 @@ from stable_baselines3 import PPO, SAC
 from stable_baselines3.common.noise import NormalActionNoise, OrnsteinUhlenbeckActionNoise
 
 from common.utils import (
-    load_model_hyperparams,
+    load_rl_hyperparams,
     load_env_params, 
     wandb_init, 
     make_vec_env, 
@@ -388,7 +388,7 @@ def main():
 
     env_config_path = f"configs/envs/"
     env_base_params, env_specific_params = load_env_params(args.env_id, env_config_path)
-    hyperparameters = load_model_hyperparams(args.algorithm, args.env_id)
+    hyperparameters = load_rl_hyperparams(args.algorithm, args.env_id)
     # Initialize the experiment manager
     experiment_manager = ExperimentManager(
         env_id=args.env_id,
