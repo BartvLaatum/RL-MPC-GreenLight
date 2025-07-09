@@ -1,0 +1,56 @@
+# Description: Configuration file for the Bleiswijk environment
+# Always define the general parameters for the base environment
+GreenLightEnv:
+  weather_data_dir: gl_gym/environments/weather # path to weather data
+  location: Amsterdam             # location of the recorded weather data
+  data_source: KNMI               # source of the weather data
+  num_params: 208                 # number of model parameters
+  nx: 28                          # number of states
+  nu: 6                           # number of control inputs
+  nd: 10                          # number of weather disturbances
+  dt: 300                         # [s] time step for the underlying GreenLight solver
+  u_min: [0, 0, 0, 0, 0, 0]
+  u_max: [1, 1, 1, 1, 1, 1]
+  delta_u_max: 0.1                # max change rate in control inputs
+  pred_horizon: 0.5               # [days] number of future weather predictions
+  season_length: 1                # number of days to simulate
+  start_train_year: 2010          # start year for training
+  end_train_year: 2010            # end year for training
+  start_train_day: 59             # start day of the year for training
+  end_train_day: 59               # end day of the year for training  
+  training: True                  # whether we are training or testing
+
+TomatoEnv:
+  reward_function: DummyReward    # reward function to use
+ 
+  observation_modules: [          # observation modules to use
+    IndoorClimateObservations,   
+    BasicCropObservations, 
+    ControlObservations, 
+    WeatherObservations,
+    TimeObservations,
+    WeatherForecastObservations
+  ]
+
+  constraints:
+    co2_min: 400.         # lower bound on CO2 concentration              [ppm]        0
+    co2_max: 1600.        # upper bound on CO2 concentration              [ppm]        2.75e-3
+    temp_min: 15.         # lower bound on temperature                    [°C]         6.5
+    temp_max: 25.         # upper bound on temperature                    [°C]        20
+    rh_min: 0.            # lower bound on relative humidity              [#]          0
+    rh_max: 90.           # upper bound on relative humidity              [#]         70
+
+  eval_options:
+    eval_days: [59]                    # days to evaluate the agent on
+    eval_years: [2010]                  # year to evaluate the agent on
+    location: Amsterdam                 # location of the greenhouse
+    data_source: KNMI                 # source of the weather data
+
+  reward_params:
+    elec_price: 0.2             # €/kWh
+    heating_price: 0.09         # €/kWh
+    co2_price: 0.3              # €/kg
+    fruit_price: 1.2            # €/kg
+    dmfm: 0.06                  # dry matter fresh matter ratio
+    pen_weights: [5.e-5, 5.e-3, 7.e-4]
+

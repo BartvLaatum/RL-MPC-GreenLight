@@ -1,0 +1,42 @@
+Using cpu device
+Logging to train_data/GL-MPC-RL/ppo/deterministic/logs/dry-planet-9/PPO_0
+Traceback (most recent call last):
+  File "/home/bart/Documents/phd-code-projects/GL-Gym-MPC/gl_py/experiments/experiment_manager.py", line 420, in <module>
+    main()
+  File "/home/bart/Documents/phd-code-projects/GL-Gym-MPC/gl_py/experiments/experiment_manager.py", line 417, in main
+    experiment_manager.run_experiment()
+  File "/home/bart/Documents/phd-code-projects/GL-Gym-MPC/gl_py/experiments/experiment_manager.py", line 353, in run_experiment
+    self.model.learn(total_timesteps=self.total_timesteps, callback=callbacks, reset_num_timesteps=False)
+  File "/home/bart/anaconda3/envs/mpccas/lib/python3.11/site-packages/stable_baselines3/ppo/ppo.py", line 311, in learn
+    return super().learn(
+           ^^^^^^^^^^^^^^
+  File "/home/bart/anaconda3/envs/mpccas/lib/python3.11/site-packages/stable_baselines3/common/on_policy_algorithm.py", line 324, in learn
+    continue_training = self.collect_rollouts(self.env, callback, self.rollout_buffer, n_rollout_steps=self.n_steps)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/bart/anaconda3/envs/mpccas/lib/python3.11/site-packages/stable_baselines3/common/on_policy_algorithm.py", line 218, in collect_rollouts
+    new_obs, rewards, dones, infos = env.step(clipped_actions)
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/bart/anaconda3/envs/mpccas/lib/python3.11/site-packages/stable_baselines3/common/vec_env/base_vec_env.py", line 222, in step
+    return self.step_wait()
+           ^^^^^^^^^^^^^^^^
+  File "/home/bart/anaconda3/envs/mpccas/lib/python3.11/site-packages/stable_baselines3/common/vec_env/vec_normalize.py", line 181, in step_wait
+    obs, rewards, dones, infos = self.venv.step_wait()
+                                 ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/bart/anaconda3/envs/mpccas/lib/python3.11/site-packages/stable_baselines3/common/vec_env/vec_monitor.py", line 76, in step_wait
+    obs, rewards, dones, infos = self.venv.step_wait()
+                                 ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/bart/anaconda3/envs/mpccas/lib/python3.11/site-packages/stable_baselines3/common/vec_env/subproc_vec_env.py", line 137, in step_wait
+    results = [remote.recv() for remote in self.remotes]
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/bart/anaconda3/envs/mpccas/lib/python3.11/site-packages/stable_baselines3/common/vec_env/subproc_vec_env.py", line 137, in <listcomp>
+    results = [remote.recv() for remote in self.remotes]
+               ^^^^^^^^^^^^^
+  File "/home/bart/anaconda3/envs/mpccas/lib/python3.11/multiprocessing/connection.py", line 250, in recv
+    buf = self._recv_bytes()
+          ^^^^^^^^^^^^^^^^^^
+  File "/home/bart/anaconda3/envs/mpccas/lib/python3.11/multiprocessing/connection.py", line 430, in _recv_bytes
+    buf = self._recv(4)
+          ^^^^^^^^^^^^^
+  File "/home/bart/anaconda3/envs/mpccas/lib/python3.11/multiprocessing/connection.py", line 399, in _recv
+    raise EOFError
+EOFError

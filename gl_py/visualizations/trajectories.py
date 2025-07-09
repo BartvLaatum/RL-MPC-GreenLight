@@ -40,7 +40,7 @@ def plot_control_trajectories(data, approach, dt, cs_suffix):
     fig.suptitle('Closed-loop Control Trajectories')
     fig.tight_layout()
     plt.show()
-    # fig.savefig(f"figures/exact-finite/{month}/control-inputs{cs_suffix}-{int(dt)}dt.png")
+    fig.savefig(f"figures/exact-finite/{month}/control-inputs{cs_suffix}-{int(dt)}dt.png")
 
 def plot_states(data, approach, dt, cs_suffix):
     """Plot the optimized control trajectories."""
@@ -73,17 +73,18 @@ def plot_states(data, approach, dt, cs_suffix):
 
             for i, ax in enumerate(axes.flat):
                 ax.set_ylabel(state_labels_with_units[i])
-                if bounds[i]:
-                    ax.hlines(bounds[i], t[0], t[-1], color='grey', linestyle='--', label='Boundaries')
+    for i, ax in enumerate(axes.flat):
+        if bounds[i]:
+            ax.hlines(bounds[i], t[0], t[-1], color='grey', linestyle='--', label='Boundaries')
                 
 
-    axes[0,0].legend(loc='upper left')
+    axes[0,1].legend(loc='upper left')
     fig.supxlabel('Time (days)')
     fig.supylabel('State variable')
     fig.suptitle('Closed-loop State Trajectories')
     fig.tight_layout()
-    plt.show()
-    # fig.savefig(f"figures/exact-finite/{month}/states{cs_suffix}-{int(dt)}dt.png")
+    # plt.show()
+    fig.savefig(f"figures/exact-finite/{month}/states{cs_suffix}-{int(dt)}dt.png")
 
 def load_data(methods, approach, month, cs_suffix):
     """Load the data from the CSV files."""

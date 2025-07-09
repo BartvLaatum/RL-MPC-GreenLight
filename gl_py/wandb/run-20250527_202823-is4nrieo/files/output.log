@@ -1,0 +1,27 @@
+Traceback (most recent call last):
+  File "/home/bart/Documents/phd-code-projects/GL-Gym-MPC/gl_py/experiments/experiment_manager.py", line 420, in <module>
+    main()
+  File "/home/bart/Documents/phd-code-projects/GL-Gym-MPC/gl_py/experiments/experiment_manager.py", line 393, in main
+    experiment_manager = ExperimentManager(
+                         ^^^^^^^^^^^^^^^^^^
+  File "/home/bart/Documents/phd-code-projects/GL-Gym-MPC/gl_py/experiments/experiment_manager.py", line 131, in __init__
+    self.init_envs(self.hyperparameters["gamma"])
+  File "/home/bart/Documents/phd-code-projects/GL-Gym-MPC/gl_py/experiments/experiment_manager.py", line 151, in init_envs
+    self.env = make_vec_env(
+               ^^^^^^^^^^^^^
+  File "/home/bart/Documents/phd-code-projects/GL-Gym-MPC/gl_py/common/utils.py", line 60, in make_vec_env
+    env = SubprocVecEnv([make_env(env_id, rank, seed, env_base_params, env_specific_params, eval_env=eval_env) for rank in range(n_envs)])
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/bart/anaconda3/envs/mpccas/lib/python3.11/site-packages/stable_baselines3/common/vec_env/subproc_vec_env.py", line 127, in __init__
+    observation_space, action_space = self.remotes[0].recv()
+                                      ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/bart/anaconda3/envs/mpccas/lib/python3.11/multiprocessing/connection.py", line 250, in recv
+    buf = self._recv_bytes()
+          ^^^^^^^^^^^^^^^^^^
+  File "/home/bart/anaconda3/envs/mpccas/lib/python3.11/multiprocessing/connection.py", line 430, in _recv_bytes
+    buf = self._recv(4)
+          ^^^^^^^^^^^^^
+  File "/home/bart/anaconda3/envs/mpccas/lib/python3.11/multiprocessing/connection.py", line 395, in _recv
+    chunk = read(handle, remaining)
+            ^^^^^^^^^^^^^^^^^^^^^^^
+ConnectionResetError: [Errno 104] Connection reset by peer

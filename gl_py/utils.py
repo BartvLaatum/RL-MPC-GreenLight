@@ -1,13 +1,24 @@
 import argparse
 from os.path import join
 from copy import deepcopy
-from typing import Tuple, SupportsFloat
+from typing import Tuple, SupportsFloat, Dict, Any
 from datetime import datetime, timedelta
 
+import yaml 
 import numpy as np
 from pandas._typing import ArrayLike
 import pandas as pd
 from scipy.interpolate import PchipInterpolator
+
+def load_model_hyperparams(algorithm: str, env_id: str) -> Dict[str, Any]:
+    with open(join("configs/agents/", algorithm + ".yml"), "r") as f:
+        params = yaml.load(f, Loader=yaml.FullLoader)
+    model_hyperparams = params[env_id]
+    return model_hyperparams
+
+def load_dummy_weather(month, start_day, season_length, pred_horizon) -> np.ndarray:
+    data = pd.read_csv(join("weather", month, "weather-300dt.csv"), sep=",")
+    
 
 def load_weather_data(
     weatherDataDir: str,
@@ -73,8 +84,8 @@ def load_weather_data(
     weatherData[:,4] = rawWeather["wind speed"][N0:N0+Ns+Np]                    # wind
     weatherData[:,5] = rawWeather["sky temperature"][N0:N0+Ns+Np]               # tSky
     weatherData[:,6] = soilTempNl(rawWeather["time"][N0:N0+Ns+Np])              # tSoOut
-    # weatherData[:, 7] = dailLightSum(time, weatherData[:,0], c)                 # daily sun radiation sum [MJ m^{-2} day^{-1}]
-    # weatherData[:, 8], weatherData[:,9] = computeisDay(weatherData[:, 0], dt)   # isDay, isDaySmooth
+    weatherData[:, 7] = dailLightSum(time, weatherData[:,0], c)                 # daily sun radiation sum [MJ m^{-2} day^{-1}]
+    weatherData[:, 8], weatherData[:,9] = computeisDay(weatherData[:, 0], dt)   # isDay, isDaySmooth
 
     # number of samples required for the solver
     ns = int((dt/h) * (Ns+Np))
@@ -439,7 +450,7 @@ if __name__ == "__main__":
         "june": 151,
     }
     weather = load_weather_data(
-        weatherDataDir="raw_weather/", 
+        weatherDataDir="weather/", 
         location="",
         source="KASPRO",
         growthYear=2023,
@@ -447,6 +458,6 @@ if __name__ == "__main__":
         n_days=31,
         predHorizon=1,
         h=args.dt,
-        nd=7
+        nd=10
     )
-    np.savetxt(f"data/{args.month}/weather-{int(args.dt)}dt.csv", weather, delimiter=",")
+    np.savetxt(f"weather/{args.month}/weather-{int(args.dt)}dt.csv", weather, delimiter=",")

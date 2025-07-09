@@ -1,0 +1,15 @@
+{"time":"2025-05-27T20:28:36.334741423+02:00","level":"INFO","msg":"stream: starting","core version":"0.19.11","symlink path":"/home/bart/Documents/phd-code-projects/GL-Gym-MPC/gl_py/wandb/run-20250527_202836-t1rvfc8y/logs/debug-core.log"}
+{"time":"2025-05-27T20:28:36.626354333+02:00","level":"INFO","msg":"created new stream","id":"t1rvfc8y"}
+{"time":"2025-05-27T20:28:36.626413793+02:00","level":"INFO","msg":"stream: started","id":"t1rvfc8y"}
+{"time":"2025-05-27T20:28:36.626447103+02:00","level":"INFO","msg":"writer: Do: started","stream_id":"t1rvfc8y"}
+{"time":"2025-05-27T20:28:36.626462115+02:00","level":"INFO","msg":"sender: started","stream_id":"t1rvfc8y"}
+{"time":"2025-05-27T20:28:36.626569706+02:00","level":"INFO","msg":"handler: started","stream_id":"t1rvfc8y"}
+{"time":"2025-05-27T20:28:36.887586467+02:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-05-27T20:28:40.373628438+02:00","level":"INFO","msg":"stream: closing","id":"t1rvfc8y"}
+{"time":"2025-05-27T20:28:40.373659934+02:00","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-05-27T20:28:40.373764454+02:00","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-05-27T20:28:40.975810338+02:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-05-27T20:28:41.172943878+02:00","level":"INFO","msg":"handler: closed","stream_id":"t1rvfc8y"}
+{"time":"2025-05-27T20:28:41.172983543+02:00","level":"INFO","msg":"writer: Close: closed","stream_id":"t1rvfc8y"}
+{"time":"2025-05-27T20:28:41.173036674+02:00","level":"INFO","msg":"sender: closed","stream_id":"t1rvfc8y"}
+{"time":"2025-05-27T20:28:41.173044349+02:00","level":"INFO","msg":"stream: closed","id":"t1rvfc8y"}

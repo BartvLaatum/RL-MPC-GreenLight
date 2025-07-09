@@ -1,0 +1,46 @@
+{
+  "os": "Linux-5.15.0-131-generic-x86_64-with-glibc2.31",
+  "python": "CPython 3.11.10",
+  "startedAt": "2025-05-27T19:59:34.612137Z",
+  "args": [
+    "--project",
+    "GL-MPC-RL"
+  ],
+  "program": "/home/bart/Documents/phd-code-projects/GL-Gym-MPC/gl_py/experiments/experiment_manager.py",
+  "codePath": "gl_py/experiments/experiment_manager.py",
+  "git": {
+    "remote": "git@github.com:BartvLaatum/GL-Gym-MPC.git",
+    "commit": "6b707527b04ce7185711fa8b97b4a2bc384346a0"
+  },
+  "email": "bart.vanlaatum@wur.nl",
+  "root": "/home/bart/Documents/phd-code-projects/GL-Gym-MPC/gl_py",
+  "host": "gpu1-HP-Z4-G4-Workstation",
+  "executable": "/home/bart/anaconda3/envs/mpccas/bin/python",
+  "codePathLocal": "experiments/experiment_manager.py",
+  "cpu_count": 6,
+  "cpu_count_logical": 12,
+  "gpu": "NVIDIA GeForce GTX 1080 Ti",
+  "gpu_count": 1,
+  "disk": {
+    "/": {
+      "total": "502392610816",
+      "used": "432876216320"
+    }
+  },
+  "memory": {
+    "total": "33360773120"
+  },
+  "cpu": {
+    "count": 6,
+    "countLogical": 12
+  },
+  "gpu_nvidia": [
+    {
+      "name": "NVIDIA GeForce GTX 1080 Ti",
+      "memoryTotal": "11811160064",
+      "cudaCores": 3584,
+      "architecture": "Pascal"
+    }
+  ],
+  "cudaVersion": "12.2"
+}

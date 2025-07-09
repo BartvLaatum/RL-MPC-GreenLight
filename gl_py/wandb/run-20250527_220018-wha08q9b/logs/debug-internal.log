@@ -1,0 +1,18 @@
+{"time":"2025-05-27T22:00:18.353034375+02:00","level":"INFO","msg":"stream: starting","core version":"0.19.11","symlink path":"/home/bart/Documents/phd-code-projects/GL-Gym-MPC/gl_py/wandb/run-20250527_220018-wha08q9b/logs/debug-core.log"}
+{"time":"2025-05-27T22:00:18.635322105+02:00","level":"INFO","msg":"created new stream","id":"wha08q9b"}
+{"time":"2025-05-27T22:00:18.635383408+02:00","level":"INFO","msg":"stream: started","id":"wha08q9b"}
+{"time":"2025-05-27T22:00:18.635435916+02:00","level":"INFO","msg":"writer: Do: started","stream_id":"wha08q9b"}
+{"time":"2025-05-27T22:00:18.635458355+02:00","level":"INFO","msg":"handler: started","stream_id":"wha08q9b"}
+{"time":"2025-05-27T22:00:18.635458401+02:00","level":"INFO","msg":"sender: started","stream_id":"wha08q9b"}
+{"time":"2025-05-27T22:00:18.910837005+02:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-05-27T22:00:37.00502923+02:00","level":"INFO","msg":"tensorboard: no root directory after 10 seconds, using working directory"}
+{"time":"2025-05-27T22:41:39.505955116+02:00","level":"INFO","msg":"api: retrying HTTP error","status":500,"url":"https://api.wandb.ai/files/bartvlaatum/GL-MPC-RL/wha08q9b/file_stream","body":"{\"error\":\"context deadline exceeded\"}"}
+{"time":"2025-05-27T22:42:33.48955089+02:00","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-05-27T22:42:33.489657425+02:00","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-05-27T22:42:34.450691313+02:00","level":"INFO","msg":"handler: operation stats","stats":{"operations":[{"desc":"uploading output.log","runtime_seconds":0.616722522,"progress":"117.5KB/117.5KB"}],"total_operations":1}}
+{"time":"2025-05-27T22:42:34.453596432+02:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-05-27T22:42:34.634321735+02:00","level":"INFO","msg":"stream: closing","id":"wha08q9b"}
+{"time":"2025-05-27T22:42:34.634355657+02:00","level":"INFO","msg":"handler: closed","stream_id":"wha08q9b"}
+{"time":"2025-05-27T22:42:34.634373427+02:00","level":"INFO","msg":"writer: Close: closed","stream_id":"wha08q9b"}
+{"time":"2025-05-27T22:42:34.634402896+02:00","level":"INFO","msg":"sender: closed","stream_id":"wha08q9b"}
+{"time":"2025-05-27T22:42:34.634554829+02:00","level":"INFO","msg":"stream: closed","id":"wha08q9b"}
