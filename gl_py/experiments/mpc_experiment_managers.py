@@ -14,7 +14,7 @@ from model.parameters import init_default_params
 
 import time
 
-class Experiment:
+class MPCExperimentManager:
     def __init__(
             self,
             mpc: MPC,
@@ -35,6 +35,7 @@ class Experiment:
         self.EPI = np.zeros((self.N, 1))
         self.penalties = np.zeros((self.N, 1))
         self.rewards = np.zeros((self.N, 1))
+        self.solver_failure = np.zeros((self.N, 1)) 
 
         # Load or define your disturbance trajectory
         self.d_values = load_dummy_weather(self.N+mpc.Np, mpc.dt, month=month)
@@ -80,102 +81,6 @@ class Experiment:
         # Now, form the overall decision vector initial guess by concatenating X_init and U_init.
         w_init = np.concatenate([X_init.T.flatten(), U_init.T.flatten()])
         return w_init
-
-    # def solve_nmpc(self):
-    #     """
-    #     Solve the nonlinear MPC problem.
-
-    #     Args:
-    #         p (Dict[str, Any]): the model parameters
-
-    #     Returns:
-    #         np.ndarray: the optimal control inputs
-    #         float: the cost value
-    #         np.ndarray: the constraints
-    #         Dict[str, Any]: the optimization output
-    #         np.ndarray: the control input changes
-    #         np.ndarray: the gradient of the cost function
-    #         np.ndarray: the hessian of the cost function
-    #     """
-
-    #     w_min = [0.0] * (self.mpc.nu * self.mpc.Np)   # Lower bounds
-    #     w_max = [1.0] * (self.mpc.nu * self.mpc.Np)   # Upper bounds
-    #     w_init = np.ones((self.mpc.nu*self.mpc.Np))*0.5
-
-    #     for ll in tqdm(range(self.N)):
-    #         print(f"Solving for timestep: {ll}")
-    #         reshape_d = np.concatenate(self.d_values[ll:ll+self.mpc.Np, :])
-    #         p_all = ca.vertcat(self.X[:, ll], reshape_d, self.p)
-
-    #         # Set up initial guess and bounds for decision variables
-    #         # Set up constraints bounds
-    #         g_min = []  # Lower bounds on constraints
-    #         g_max = []  # Upper bounds on constraints
-    #         solution = self.mpc.solver_single(
-    #             x0=ca.DM(w_init),
-    #             lbx=ca.DM(w_min),
-    #             ubx=ca.DM(w_max),
-    #             lbg=ca.DM(g_min),
-    #             ubg=ca.DM(g_max),
-    #             p=p_all
-    #         )
-    #         # Extract the optimal control inputs from the solution
-    #         w_opt = solution["x"].full().flatten().reshape(self.mpc.Np, self.mpc.nu).T  # Convert to a NumPy array
-    #         self.U[:, ll+1] = w_opt[:, 0]
-    #         w_init = w_opt.T.flatten()
-    #         w_init = np.concatenate([w_init[self.mpc.nu:], w_init[-self.mpc.nu:]])
-    #         res = self.mpc.F(x0=self.X[:,ll], u=self.U[:, ll+1], p=ca.vertcat(*[reshape_d[:self.mpc.nd], self.p]))
-    #         self.X[:, ll+1] = res["xf"].toarray().ravel()
-
-    # def get_init_multi(self, ll, U_init=None):
-    #     print("obtaining single shooting guess")
-        
-    #     # Retrieve dimensions
-    #     nx = self.mpc.nx
-    #     nu = self.mpc.nu
-    #     Np = self.mpc.Np
-        
-    #     w_min = [0.0] * (self.mpc.nu * self.mpc.Np)   # Lower bounds
-    #     w_max = [1.0] * (self.mpc.nu * self.mpc.Np)   # Upper bounds
-
-    #     w_init = np.ones((self.mpc.nu*self.mpc.Np))*0.5
-    #     g_min = []  # Lower bounds on constraints
-    #     g_max = []  # Upper bounds on constraints
-    #     reshape_d = np.concatenate(self.d_values[ll:ll+self.mpc.Np, :])
-    #     p_all = ca.vertcat(self.X[:, ll], reshape_d, self.p)
-
-    #     solution = self.mpc.solver_single(
-    #         x0=ca.DM(w_init),
-    #         lbx=ca.DM(w_min),
-    #         ubx=ca.DM(w_max),
-    #         lbg=ca.DM(g_min),
-    #         ubg=ca.DM(g_max),
-    #         p=p_all
-    #     )
-
-    #     U_init = solution["x"].full().flatten().reshape(self.mpc.Np, self.mpc.nu).T  # Convert to a (Np, nu) array
-
-    #     X_init = np.zeros((nx, Np+1))
-    #     # Set the initial state from the current state at time ll.
-    #     X_init[:, 0] = self.X[:, ll]  # assuming self.X[:, ll] is a numpy array
-
-    #     # Propagate the dynamics using the initial guess for controls.
-    #     for k in range(Np):
-    #         # Use the k-th control guess
-    #         u_k = U_init[:, k]
-    #         # Use the k-th disturbance from d_values (ensure proper shape)
-    #         D_k = self.d_values[ll + k, :]  
-    #         # Build the parameter vector for F as: [D_k; self.p]
-    #         p_dyn = ca.vertcat(ca.DM(D_k), self.p)
-    #         # Propagate the state: note that F returns a dictionary with key "xf"
-    #         res = self.mpc.F(x0=ca.DM(X_init[:, k]), u=ca.DM(u_k), p=p_dyn)
-    #         # Extract the next state; convert to a 1D NumPy array.
-    #         X_next = res["xf"].full().flatten()
-    #         X_init[:, k+1] = X_next
-
-    #     w_init = np.concatenate([X_init.T.flatten(), U_init.T.flatten()])
-    #     return w_init
-
 
     def get_x_init(self, ll, U_init=None):
         # Retrieve dimensions
@@ -236,6 +141,7 @@ class Experiment:
 
         w_min = u_min + s_min
         w_max = u_max + s_max
+
 
         u_init = np.ones((self.mpc.nu, self.mpc.Np))*0.5
         s_init = np.zeros((self.mpc.ns, self.mpc.Np))
@@ -346,7 +252,7 @@ class Experiment:
             )
             # Extract the optimal decision variables from the solution
             w_opt = solution["x"].full().flatten()
-            
+
             us_opt = w_opt[:self.mpc.nu*self.mpc.Np].reshape(self.mpc.Np, self.mpc.nu).T
             xs_opt = w_opt[self.mpc.nu*self.mpc.Np:self.mpc.nu*self.mpc.Np+self.mpc.nx*(self.mpc.Np+1)].reshape(self.mpc.Np+1, self.mpc.nx).T
             s_opt = w_opt[-(self.mpc.ns*self.mpc.Np):].reshape(self.mpc.Np, self.mpc.ns).T
@@ -366,10 +272,12 @@ class Experiment:
 
             # costs
             self.EPI[ll, :] = \
-                (self.X[25, ll+1]-self.X[25, ll])* 1e-6 / 0.06 * 1.2 - \
-                (0.09 * self.p[108]/self.p[46] * 1e-3 * us_opt[:, 0][0]/self.hour_conversion + \
-                0.2 * self.p[172] * 1e-3 * us_opt[:, 0][4]/self.hour_conversion + \
-                0.3 * us_opt[:, 0][1]* self.p[109]/self.p[46] * 1e-6 * self.mpc.dt)
+                (
+                    self.X[25, ll+1]-self.X[25, ll])* 1e-6 / 0.06 * 1.2 - \
+                    (0.09 * self.p[108]/self.p[46] * 1e-3 * us_opt[:, 0][0]/self.hour_conversion + \
+                    0.2 * self.p[172] * 1e-3 * us_opt[:, 0][4]/self.hour_conversion + \
+                    0.3 * us_opt[:, 0][1]* self.p[109]/self.p[46] * 1e-6 * self.mpc.dt
+                )
             self.penalties[ll, :] = self.mpc.compute_penalties(self.X[:,ll+1])
 
             self.rewards[ll, :] = self.EPI[ll, :] - self.penalties[ll, :]
@@ -383,17 +291,234 @@ class Experiment:
             # constraints = solution["g"]
             # Additional outputs could be processed as needed.
 
-
-    def save_data(self, approach):
+    def save_data(self, save_dir, approach, horizon):
         """Save the data to a file."""
-        dir = f"results/test/{self.method}/{approach}/{self.month}"
-        os.makedirs(dir, exist_ok=True)
-        np.savetxt(f"{dir}/control-inputs-cs-{int(self.mpc.dt)}dt-3H.csv", self.U.T, delimiter=",")
-        np.savetxt(f"{dir}/states-cs-{int(self.mpc.dt)}dt-3H.csv", self.X.T, delimiter=",")
-        np.savetxt(f"{dir}/times-cs-{int(self.mpc.dt)}dt-3H.csv", self.exec_time, delimiter=",")
-        np.savetxt(f"{dir}/EPI-cs-{int(self.mpc.dt)}dt-3H.csv", self.EPI, delimiter=",")
-        np.savetxt(f"{dir}/penalties-cs-{int(self.mpc.dt)}dt-3H.csv", self.penalties, delimiter=",")
-        np.savetxt(f"{dir}/rewards-cs-{int(self.mpc.dt)}dt-3H.csv", self.rewards, delimiter=",")
+        # dir = f"results/test/{self.method}/{approach}/{self.month}"
+        os.makedirs(save_dir, exist_ok=True)
+        np.savetxt(f"{save_dir}/term_pen_control-inputs-cs-{int(self.mpc.dt)}dt-{horizon}H.csv", self.U.T, delimiter=",")
+        np.savetxt(f"{save_dir}/term_pen_solver-failure-cs-{int(self.mpc.dt)}dt-{horizon}H.csv", self.solver_failure, delimiter=",")
+        np.savetxt(f"{save_dir}/term_pen_states-cs-{int(self.mpc.dt)}dt-{horizon}H.csv", self.X.T, delimiter=",")
+        np.savetxt(f"{save_dir}/term_pen_times-cs-{int(self.mpc.dt)}dt-{horizon}H.csv", self.exec_time, delimiter=",")
+        np.savetxt(f"{save_dir}/term_pen_EPI-cs-{int(self.mpc.dt)}dt-{horizon}H.csv", self.EPI, delimiter=",")
+        np.savetxt(f"{save_dir}/term_pen_penalties-cs-{int(self.mpc.dt)}dt-{horizon}H.csv", self.penalties, delimiter=",")
+        np.savetxt(f"{save_dir}/term_pen_rewards-cs-{int(self.mpc.dt)}dt-{horizon}H.csv", self.rewards, delimiter=",")
+
+class RLMPCExperimentManager(MPCExperimentManager):
+    def __init__(
+        self,
+        rl_mpc: MPC,
+        month: str,
+        n_days: int,
+        method: str,
+    ):
+        super().__init__(rl_mpc, month, n_days, method)
+
+    def solve_nmpc(self):
+        """
+        Solve the nonlinear MPC problem.
+
+        Args:
+            p (Dict[str, Any]): the model parameters
+
+        Returns:
+            np.ndarray: the optimal control inputs
+            float: the cost value
+            np.ndarray: the constraints
+            Dict[str, Any]: the optimization output
+            np.ndarray: the control input changes
+            np.ndarray: the gradient of the cost function
+            np.ndarray: the hessian of the cost function
+        """
+        u_min = [0.0] * (self.mpc.nu * self.mpc.Np)   # Lower bounds input
+        u_max = [1.0] * (self.mpc.nu * self.mpc.Np)   # Upper bounds input
+        s_min = [-ca.inf] * (self.mpc.ns * self.mpc.Np)   # Lower bounds slack
+        s_max = [ca.inf] * (self.mpc.ns * self.mpc.Np)   # Upper bounds slack
+        xn_min = [-ca.inf] * (3)   # Lower bounds terminal state
+        xn_max = [ca.inf] * (3) # upper bounds terminal state
+        w_min = u_min + s_min + xn_min
+        w_max = u_max + s_max + xn_max
+
+        self.mpc.eval_env.reset()
+        # Generate roll-outs using the RL policy
+        logs = self.mpc.unroll_actor(horizon=self.mpc.Np)
+        rl_guess_xs = np.array(logs["x"])
+
+        # Extract the initial guesses for control inputs and states from roll-out logs
+        u_init = np.array(logs["u"])
+
+        rl_guess_xs[:, -1]  # Last state from the roll-out
+        s_init = np.zeros((self.mpc.ns, self.mpc.Np))
+        s_init.T.flatten()
+        w_init = np.concatenate([u_init.T.flatten(), s_init.T.flatten(), rl_guess_xs[[0, 2, 15], -1]])
+        for ll in tqdm(range(self.N)):
+            t = time.time()
+            reshape_d = np.concatenate(self.d_values[ll:ll+self.mpc.Np, :])
+            p_all = ca.vertcat(self.X[:, ll], self.U[:, ll], reshape_d, self.p, rl_guess_xs[[0, 2, 15], -1])
+            # Set up initial guess and bounds for decision variables
+            # Set up constraints bounds
+
+            # g_min = [*-self.mpc.du_max]*self.mpc.Np  # Lower bounds on constraints
+            # g_max = [*self.mpc.du_max]*self.mpc.Np   # Upper bounds on constraints
+            solution = self.mpc.solver_single(
+                x0=ca.DM(w_init),
+                lbx=ca.DM(w_min),
+                ubx=ca.DM(w_max),
+                lbg=ca.DM(self.mpc.lbg),
+                ubg=ca.DM(self.mpc.ubg),
+                p=p_all
+            )
+
+            # Extract the optimal control inputs from the solution
+            w_opt = solution["x"].full().flatten()
+            us_opt = w_opt[:self.mpc.nu*self.mpc.Np].reshape(self.mpc.Np, self.mpc.nu).T
+            s_opt = w_opt[-(self.mpc.ns*self.mpc.Np):].reshape(self.mpc.Np, self.mpc.ns).T     
+
+
+            # simulate the next time step
+            self.U[:, ll+1] = us_opt[:, 0]
+            res = self.mpc.F(x0=self.X[:,ll], u=self.U[:, ll+1], p=ca.vertcat(*[reshape_d[:self.mpc.nd], self.p]))
+            self.X[:, ll+1] = res["xf"].toarray().ravel()
+            self.exec_time[ll, :] = time.time()-t
+
+            # Set the environment state for the next roll-out
+            day_of_year = self.mpc.eval_env.get_attr("day_of_year")[0] + (self.mpc.dt/86400) % 365
+            hour_of_day = (self.mpc.eval_env.get_attr("hour_of_day")[0] + (self.mpc.dt/3600)) % 24
+            self.mpc.eval_env.env_method(
+                "set_env_state", 
+                *(self.X[:, ll], self.X[:,ll-1], self.U[:,ll], ll, hour_of_day, day_of_year)
+            )
+            # generate new roll-outs using the RL policy
+            logs = self.mpc.unroll_actor(horizon=self.mpc.Np)
+
+            u_init = np.array(logs["u"])
+            rl_guess_xs = np.array(logs["x"])
+
+            # Update the initial guess for the next iteration; using the rolled previous solution 
+            u_init = np.concatenate([us_opt[:, 1:].T.flatten(), us_opt[:, -1].T.flatten()])
+            s_init = np.concatenate([s_opt[:, 1:].T.flatten(), s_opt[:, -1].T.flatten()])
+            w_init = np.concatenate([u_init, s_init, rl_guess_xs[[0, 2, 15], -1]])
+
+            # Compute closed-loop performance
+            self.EPI[ll, :] = \
+                (self.X[25, ll+1]-self.X[25, ll])* 1e-6 / 0.06 * 1.2 - \
+                (0.09 * self.p[108]/self.p[46] * 1e-3 * us_opt[:, 0][0]/self.hour_conversion + \
+                0.2 * self.p[172] * 1e-3 * us_opt[:, 0][4]/self.hour_conversion + \
+                0.3 * us_opt[:, 0][1]* self.p[109]/self.p[46] * 1e-6 * self.mpc.dt)
+            self.penalties[ll, :] = self.mpc.compute_penalties(self.X[:,ll+1])
+
+            self.rewards[ll, :] = self.EPI[ll, :] - self.penalties[ll, :]
+
+
+        print(f"Average solver time per iteration: {np.mean(self.exec_time)} (s)")
+
+
+    def solve_nmpc_multi(self):
+        """
+        Solve the nonlinear MPC problem using the multiple-shooting formulation.
+
+        Args:
+            p (Dict[str, Any]): the model parameters
+
+        Returns:
+            np.ndarray: the optimal control inputs
+            float: the cost value
+            np.ndarray: the constraints
+            Dict[str, Any]: the optimization output
+            np.ndarray: the control input changes
+            np.ndarray: the gradient of the cost function
+            np.ndarray: the hessian of the cost function
+        """
+        # Define the lower and upper bounds for the decision variables
+        u_min = [0.0] * (self.mpc.nu * self.mpc.Np)
+        u_max = [1.0] * (self.mpc.nu * self.mpc.Np)
+        s_min = [-ca.inf] * (self.mpc.ns * self.mpc.Np)
+        s_max = [ca.inf] * (self.mpc.ns * self.mpc.Np)
+        x_min = [-ca.inf] * (self.mpc.nx * (self.mpc.Np+1))
+        x_max = [ca.inf] * (self.mpc.nx * (self.mpc.Np+1))
+        w_min = u_min + s_min + x_min
+        w_max = u_max + s_max + x_max
+
+        self.mpc.eval_env.reset()
+        # Generate roll-outs using the RL policy
+        logs = self.mpc.unroll_actor(horizon=self.mpc.Np)
+
+        # Extract the initial guesses for control inputs and states from roll-out logs
+        u_init = np.array(logs["u"])
+        x_init = np.array(logs["x"])
+
+        # intial guess for slack variables
+        s_init = np.zeros((self.mpc.ns, self.mpc.Np))
+        s_init.T.flatten()
+
+        # Concatenate the initial guesses into a single decision variable vector
+        w_init = np.concatenate([u_init.T.flatten(), x_init.T.flatten(), s_init.T.flatten()])
+
+        for ll in tqdm(range(self.N)):
+            t = time.time()
+            reshape_d = np.concatenate(self.d_values[ll:ll+self.mpc.Np, :])
+            p_all = ca.vertcat(self.X[:, ll], self.U[:, ll], reshape_d, self.p, x_init[[0, 2, 15], -1])
+            try:
+                solution = self.mpc.solver_multi(
+                    x0=ca.DM(w_init),
+                    lbx=ca.DM(w_min),
+                    ubx=ca.DM(w_max),
+                    lbg=ca.DM(self.mpc.lbg),
+                    ubg=ca.DM(self.mpc.ubg),
+                    p=p_all
+                )
+
+                # self.previous_solution = solution
+            except Exception as e:
+                print(f"Solver failed at iteration {ll}: {e}")
+                self.solver_failure[ll] = 1
+                # u = self.previous_solution.copy()
+
+            # Extract the optimal decision variables from the solution
+            w_opt = solution["x"].full().flatten()
+
+            us_opt = w_opt[:self.mpc.nu*self.mpc.Np].reshape(self.mpc.Np, self.mpc.nu).T
+            xs_opt = w_opt[self.mpc.nu*self.mpc.Np:self.mpc.nu*self.mpc.Np+self.mpc.nx*(self.mpc.Np+1)].reshape(self.mpc.Np+1, self.mpc.nx).T
+            s_opt = w_opt[-(self.mpc.ns*self.mpc.Np):].reshape(self.mpc.Np, self.mpc.ns).T
+
+
+            # simulate the next time step
+            self.U[:, ll+1] = us_opt[:, 0]
+            res = self.mpc.F(x0=self.X[:,ll], u=self.U[:, ll+1], p=ca.vertcat(*[reshape_d[:self.mpc.nd], self.p]))
+            self.X[:, ll+1] = res["xf"].toarray().ravel()
+            self.exec_time[ll, :] = time.time()-t
+
+            # Set the environment state for the next roll-out
+            day_of_year = self.mpc.eval_env.get_attr("day_of_year")[0] + (self.mpc.dt/86400) % 365
+            hour_of_day = (self.mpc.eval_env.get_attr("hour_of_day")[0] + (self.mpc.dt/3600)) % 24
+
+            self.mpc.eval_env.env_method(
+                "set_env_state", 
+                *(self.X[:, ll], self.X[:,ll-1], self.U[:,ll], ll, hour_of_day, day_of_year)
+            )
+
+            # generate new roll-outs using the RL policy
+            logs = self.mpc.unroll_actor(horizon=self.mpc.Np)
+
+            u_init = np.array(logs["u"])
+            x_init = np.array(logs["x"])
+
+            # Update the initial guess for slack variables; using the rolled previous solution 
+            s_init = np.concatenate([s_opt[:, 1:].T.flatten(), s_opt[:, -1].T.flatten()])
+            w_init = np.concatenate([u_init.T.flatten(), x_init.T.flatten(), s_init])
+
+            # costs
+            self.EPI[ll, :] = \
+                (
+                    self.X[25, ll+1]-self.X[25, ll])* 1e-6 / 0.06 * 1.2 - \
+                    (0.09 * self.p[108]/self.p[46] * 1e-3 * us_opt[:, 0][0]/self.hour_conversion + \
+                    0.2 * self.p[172] * 1e-3 * us_opt[:, 0][4]/self.hour_conversion + \
+                    0.3 * us_opt[:, 0][1]* self.p[109]/self.p[46] * 1e-6 * self.mpc.dt
+                )
+            self.penalties[ll, :] = self.mpc.compute_penalties(self.X[:,ll+1])
+
+            self.rewards[ll, :] = self.EPI[ll, :] - self.penalties[ll, :]
+
+        print(f"Average solver time per iteration: {np.mean(self.exec_time)} (s)")
 
 def solver_opts(method):
     nlp_opts = {}
@@ -401,8 +526,9 @@ def solver_opts(method):
     nlp_opts["ipopt.warm_start_init_point"] = "yes"
     nlp_opts["ipopt.max_iter"] = 1000
     nlp_opts["ipopt.tol"] = 1e-2
-    nlp_opts["ipopt.acceptable_tol"] = 0.1
-    nlp_opts["print_time"] = False
+    nlp_opts["ipopt.acceptable_tol"] = 0.1    
+    nlp_opts["ipopt.acceptable_constr_viol_tol"] = 0.1    
+    nlp_opts["print_time"] = True
     nlp_opts["ipopt.linear_solver"] = "ma57"
 
     if method == "finite-difference":
@@ -418,6 +544,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--method", type=str, choices=["exact", "finite-difference"], required=True)
     parser.add_argument("--approach", type=str, choices=["single", "multi"], required=True)
+    parser.add_argument("--horizon", type=int, default=1, help="Prediction horizon in hours")
     args = parser.parse_args()
 
     n_params = 208
@@ -426,16 +553,16 @@ def main():
     ns = 6
     nd = 10
     dt = 300.
-    n_days = 1
+    n_days = 0.25
     month = "june"
-    Np = 36
+    Np = int(args.horizon * 3600 / dt)  # Convert horizon in hours to number of steps
 
     print(f"Running {args.method} method")
     print(f"Using {args.approach}-shooting approach")
     nlp_opts = solver_opts(args.method)
 
     mpc = MPC(nx, nu, ns, n_params, nd, dt, Np, nlp_opts)
-    exp = Experiment(mpc, month, n_days, args.method)
+    exp = MPCExperimentManager(mpc, month, n_days, args.method)
 
     if args.approach == "single":
         exp.mpc.define_nlp()
@@ -445,7 +572,7 @@ def main():
         exp.solve_nmpc_multi()
 
     exp.X = convert_rh_ppm(exp.X)
-    exp.save_data(args.approach)
+    exp.save_data(args.approach, args.horizon)
 
 if __name__ == "__main__":
     main()

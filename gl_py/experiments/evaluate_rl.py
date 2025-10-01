@@ -72,13 +72,13 @@ if __name__ == "__main__":
         save_dir = f"results/{args.project}/{args.mode}/{args.algorithm}/{args.uncertainty_scale}/"
         n_sims = 30
     else:
-        save_dir = f"results/{args.project}/{args.mode}/"
+        save_dir = f"results/{args.project}/{args.mode}/{args.algorithm}"
         n_sims = 1
     os.makedirs(save_dir, exist_ok=True)
 
     # load in the environment and model
     env_base_params, env_specific_params = load_rl_env_params(args.env_id, env_config_path)
-    model_params = load_rl_hyperparams(args.algorithm, args.env_id)
+    model_params = load_rl_hyperparams(args.env_id, args.algorithm)
     env_specific_params["uncertainty_scale"] = args.uncertainty_scale
     eval_env = load_env(args.env_id, args.model_name, env_base_params, env_specific_params, load_path)
 

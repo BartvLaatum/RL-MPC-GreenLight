@@ -34,22 +34,19 @@ class RLMPC(MPC):
         dt: float,
         Np: int,
         nlp_opts: Dict[str, Any],
+        terminal_constraint: bool,
         eval_env: DummyVecEnv,
         model: BaseAlgorithm,
     ):
         super().__init__(nx, nu, ns, n_params, nd, dt, Np, nlp_opts)
-        # self.nx = nx
-        # self.nu = nu
-        # self.ns = ns
-        # self.n_params = n_params
-        # self.nd = nd
-        # self.Np = Np
-        # self.dt = dt
-        # self.nlp_opts = nlp_opts
-
-        # self.n_vars = nx + nu + ns
+        self.terminal_constraint = terminal_constraint
         self.eval_env = eval_env
         self.model = model
+
+        # penalize deviations in first 3 climate states and fruit biomass
+        # self.terminal_penalty_weights = np.zeros(shape=(3,))
+        self.terminal_penalty_weights = np.zeros(shape=(self.nx,))
+        self.terminal_penalty_weights[:] = 1e-5
 
         # defining model dynamics
         self.F = define_model(self.nx, self.nu, self.nd, self.n_params, self.dt)
@@ -78,35 +75,38 @@ class RLMPC(MPC):
             "u":[],
         }
         obs_log, obs_norm_log, x_log, u_log = [],[],[],[]
-        total_cost = 0
+        cumulative_reward = 0
         rewards_log = []
 
         obs = self.eval_env.env_method("_get_obs")[0]  # Get the initial observation from the environment
         obs_log.append(obs)
         x_log.append(self.eval_env.env_method("get_state")[0])
-        obs = self.eval_env.normalize_obs(obs)
+        obs = self.eval_env.normalize_obs(obs).reshape(1, -1)  # Normalize the observation
+
+        states = None # States for the model, can be used for recurrent models
+        episode_starts = None # Not used in this context, can be used for recurrent models
+        terminated = False
 
         # Freeze environment 
         if freeze:
             self.eval_env.env_method("freeze") # freeze variables
-
-        terminated = False
         for i in range(0, horizon):
-
-            action, _ = self.model.predict(obs)
-            obs, reward, terminated, info = self.eval_env.step(action)
-            print(obs[0, :10])
+            action, _ = self.model.predict(
+                obs,
+                state=states,
+                # episode_start=episode_starts,
+                deterministic=True,
+        )
+            obs, rewards, terminated, infos = self.eval_env.step(action)
             x = self.eval_env.env_method("get_state")[0]
 
-            total_cost += reward
-            rewards_log.append(reward)
+            cumulative_reward += rewards
+            rewards_log.append(rewards)
             
-            # print(self.eval_env.unnormalize_obs(obs).ravel())
-            
-            obs_log.append(self.eval_env.unnormalize_obs(obs).ravel())
-            obs_norm_log.append(obs)
+            obs_norm_log.append(obs[0])
+            obs_log.append(self.eval_env.unnormalize_obs(obs[0]).ravel())
             x_log.append(x)
-            u_log.append(obs[4:7])
+            u_log.append(infos[0]["controls"])
 
         # Unfreeze environment
         if freeze:
@@ -118,11 +118,10 @@ class RLMPC(MPC):
         log["x"] = np.vstack(x_log).transpose()
         log["u"] = np.vstack(u_log).transpose()
         log["obs_norm"] = np.vstack(obs_norm_log).transpose()
-        log["total_reward"] = total_cost
+        log["cumulative_reward"] = cumulative_reward
         log["reward_log"] = np.array(rewards_log)
 
         return log
-
 
     def define_nlp(self):
         """
@@ -130,13 +129,17 @@ class RLMPC(MPC):
         """
         # Control variables (decision variables)
         U = ca.MX.sym("U", self.nu, self.Np)
-        S = ca.MX.sym("S", self.ns, self.Np)  # Slack variables
+        S = ca.MX.sym("S", self.ns, self.Np)
+        XN = ca.MX.sym("XN", 3)
 
         # Parameters (initial state, disturbances, and parameters)
         X0 = ca.MX.sym("X0", self.nx)
         D = ca.MX.sym("D", self.nd, self.Np)
         P = ca.MX.sym("P", self.n_params)
         U0 = ca.MX.sym("U0", self.nu)  # Initial control input
+
+        # Terminal state (optional, can be used for terminal constraints)
+        X_terminal = ca.MX.sym("X_terminal", 3, 1)
 
         # Initialize cost and constraints
         J = 0
@@ -155,6 +158,14 @@ class RLMPC(MPC):
         g.append(U[:, 0] - U0)
         self.lbg.extend(-self.du_max)
         self.ubg.extend(self.du_max)
+
+        # Terminal state constraints (optional, can be used for terminal constraints)        
+        # lower‐inequality: X[-1] ≥ 0.95 X_terminal
+        print(f"Using terminal constraints: {self.terminal_constraint}")
+        if self.terminal_constraint:
+
+            terminal_penalty = ca.dot(ca.DM(self.terminal_penalty_weights), ca.fabs(XN - X_terminal))
+            J += terminal_penalty
 
         # Loop over prediction horizon
         for k in range(self.Np):
@@ -177,7 +188,6 @@ class RLMPC(MPC):
                 0.2 * P[172] * 1e-3 * Uk[4]/hour_conversion + \
                 0.3 * Uk[1]* P[109]/P[46] * 1e-6 * self.dt                        # costs for CO2
 
-
             S, S_constraints, S_lbg, S_ubg = self.set_slack_variables(k, Xk, S)
             g.extend(S_constraints)
             self.lbg.extend(S_lbg)
@@ -186,23 +196,26 @@ class RLMPC(MPC):
             J += ca.sum1(S[:, k])
 
 
-        J += - (Xk[25]-X0[25])* 1e-6 / 0.06 * 1.2              # revenue from selling tomatoes
+        g.append(XN - Xk[0, 2, 15])
+        self.lbg.extend([0]*X_terminal.size1())
+        self.ubg.extend([0]*X_terminal.size1())
+
+        J += - (Xk[25]-X0[25])* 1e-6 / 0.06 * 1.2   # revenue from selling tomatoes
 
         # Decision variables
-        w = ca.vertcat(ca.vec(U), ca.vec(S))
+        w = ca.vertcat(ca.vec(U), ca.vec(S), ca.vec(XN))
 
         # Constraints (empty if no constraints)
         g_all = ca.vertcat(*g)
 
         # Parameters for NLP
-        p_nlp = ca.vertcat(X0, U0, ca.vec(D), P)
+        p_nlp = ca.vertcat(X0, U0, ca.vec(D), P, X_terminal)
 
         # Define the NLP problem
         nlp = {'x': w, 'f': J, 'g': g_all, 'p': p_nlp}
 
         # Create solver
         self.solver_single = ca.nlpsol("solver", "ipopt", nlp, self.nlp_opts)
-
 
     def define_nlp_multi(self):
         """
@@ -219,6 +232,10 @@ class RLMPC(MPC):
         P = ca.MX.sym("P", self.n_params)
         U0 = ca.MX.sym("U0", self.nu)  # Initial control input
 
+        # Terminal state (optional, can be used for terminal constraints)
+        # X_terminal = ca.MX.sym("X_terminal", 3, 1)
+        X_terminal = ca.MX.sym("X_terminal", self.nx, 1)
+
         # Initialize cost and constraints
         J = 0
 
@@ -232,13 +249,29 @@ class RLMPC(MPC):
         self.lbg = []
         self.ubg = []
 
+        # Initial state constraints
         g.append(X[:, 0] - X0)
         self.lbg.extend([0]*self.nx)
         self.ubg.extend([0]*self.nx)
 
+        # Initial control input constraints
         g.append(U[:, 0] - U0)
         self.lbg.extend(-self.du_max)
         self.ubg.extend(self.du_max)
+
+        # Terminal state constraints (optional, can be used for terminal constraints)        
+        print(f"Using terminal constraints: {self.terminal_constraint}")
+        if self.terminal_constraint:
+            g.append(X[:, -1] - 0.95*X_terminal)
+            self.lbg.extend([0.0]*X_terminal.size1())
+            self.ubg.extend([float('inf')]*X_terminal.size1())
+
+            # upper‐inequality: X[-1] ≤ 1.05 X_terminal
+            g.append(X[:, -1] - 1.05*X_terminal)
+            self.lbg.extend([-float('inf')]*X_terminal.size1())
+            self.ubg.extend([0.0]*X_terminal.size1())
+            terminal_penalty = ca.dot(self.terminal_penalty_weights, ca.fabs(X[:, -1] - X_terminal))
+            J += terminal_penalty
 
         # Loop over prediction horizon
         for k in range(self.Np):
@@ -282,7 +315,7 @@ class RLMPC(MPC):
         g_all = ca.vertcat(*g)
 
         # Parameters for NLP
-        p_nlp = ca.vertcat(X0, U0, ca.vec(D), P)
+        p_nlp = ca.vertcat(X0, U0, ca.vec(D), P, X_terminal)
 
         # Define the NLP problem
         nlp = {'x': w, 'f': J, 'g': g_all, 'p': p_nlp}
@@ -292,70 +325,61 @@ class RLMPC(MPC):
         # Create solver
         self.solver_multi = ca.nlpsol("solver", "ipopt", nlp, self.nlp_opts)
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--project", type=str, default="GL-MPC-RL")
-    parser.add_argument("--env_id", type=str, default="TomatoEnv")
-    parser.add_argument("--save_name", type=str)
-    parser.add_argument("--weather_filename", default="weather-300dt.csv", type=str)
-    parser.add_argument("--algorithm", type=str, default="ppo")
-    parser.add_argument("--model_name", type=str, default="graceful-planet-22")
-    # parser.add_argument("--use_trained_vf", action="store_true")
-    args = parser.parse_args()
+# if __name__ == "__main__":
+#     parser = argparse.ArgumentParser()
+#     parser.add_argument("--project", type=str, default="GL-MPC-RL")
+#     parser.add_argument("--env_id", type=str, default="TomatoEnv")
+#     parser.add_argument("--save_name", type=str)
+#     parser.add_argument("--weather_filename", default="weather-300dt.csv", type=str)
+#     parser.add_argument("--algorithm", type=str, default="ppo")
+#     parser.add_argument("--model_name", type=str, default="graceful-planet-22")
+#     # parser.add_argument("--use_trained_vf", action="store_true")
+#     args = parser.parse_args()
 
-    load_path = f"train_data/{args.project}/{args.algorithm}/deterministic"
-    save_path = f"results/{args.project}/rlmpc"
-    os.makedirs(save_path, exist_ok=True)
+#     load_path = f"train_data/{args.project}/{args.algorithm}/deterministic"
+#     save_path = f"results/{args.project}/rlmpc"
+#     os.makedirs(save_path, exist_ok=True)
 
-    rl_model_path = f"{load_path}/models/{args.model_name}/best_model.zip"
-    # vf_path = f"{load_path}/models/{args.model_name}/vf.zip"
-    env_path = f"{load_path}/envs/{args.model_name}/best_vecnormalize.pkl"
+#     rl_model_path = f"{load_path}/models/{args.model_name}/best_model.zip"
+#     # vf_path = f"{load_path}/models/{args.model_name}/vf.zip"
+#     env_path = f"{load_path}/envs/{args.model_name}/best_vecnormalize.pkl"
 
-    base_env_params, specific_env_params = load_rl_env_params(args.env_id, "configs/envs/")
-    mpc_params = load_mpc_params(args.env_id)
+#     base_env_params, specific_env_params = load_rl_env_params(args.env_id, "configs/envs/")
+    
+#     # load the hyperparameter for MPC and RL
+#     mpc_params = load_mpc_params(args.env_id)
+#     hyperparameters = load_rl_hyperparams(args.env_id, args.algorithm)
 
-    # load the RL parameters
-    hyperparameters = load_rl_hyperparams(args.env_id, args.algorithm)
-    # rl_env_params.update(env_params)
-    # eval_env = TomatoEnv(base_env_params=base_env_params, **specific_env_params)
-    # eval_env.reset(seed=666)
-    # eval_env = DummyVecEnv([lambda: eval_env])
-    # eval_env = VecNormalize(
-    #     eval_env, 
-    #     norm_obs = True, 
-    #     norm_reward = False, 
-    #     clip_obs = 10.,
-    #     gamma=GAMMA,
-    # )
-    eval_env = load_env(args.env_id, args.model_name, base_env_params, specific_env_params, load_path)
-    # eval_env = eval_env.load(env_path, eval_env)
-    # eval_env.training = False
-    eval_env.reset()
-    model = ALGS[args.algorithm].load(rl_model_path, env=eval_env)
-    n_params = 208
-    nx = 28
-    nu = 6
-    ns = 6
-    nd = 10
-    dt = 300.
-    n_days = 1
-    month = "june"
-    Np = 36
-    print(eval_env.obs_rms.mean[:10])
-    kwargs = {
-        "nx": nx,
-        "nu": nu,
-        "ns": ns,
-        "n_params": n_params,
-        "nd": nd,
-        "dt": dt,
-        "Np": Np,
-        "nlp_opts": mpc_params["nlp_opts"],
-        "eval_env": eval_env,
-        "model": model,
-    }
+#     eval_env = load_env(args.env_id, args.model_name, base_env_params, specific_env_params, load_path)
+#     eval_env.reset()
+#     model = ALGS[args.algorithm].load(rl_model_path, env=eval_env)
 
-    rl_mpc = RLMPC(**kwargs)
-    log = rl_mpc.unroll_actor()
-    from pprint import pprint
-    pprint(log["x"])
+#     n_params = 208
+#     nx = 28
+#     nu = 6
+#     ns = 6
+#     nd = 10
+#     dt = 300.
+#     n_days = 1
+#     month = "june"
+#     Np = 36
+
+#     kwargs = {
+#         "nx": nx,
+#         "nu": nu,
+#         "ns": ns,
+#         "n_params": n_params,
+#         "nd": nd,
+#         "dt": dt,
+#         "Np": Np,
+#         "nlp_opts": mpc_params["nlp_opts"],
+#         "eval_env": eval_env,
+#         "model": model,
+#     }
+
+#     rl_mpc = RLMPC(**kwargs)
+#     log = rl_mpc.unroll_actor()
+#     rl_mpc.define_nlp_multi()
+    
+#     rl_mpc.eval_env.reset()
+

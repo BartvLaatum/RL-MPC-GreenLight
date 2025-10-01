@@ -99,21 +99,24 @@ class TomatoEnv(GreenLightEnv):
         # self.freeze_y_prev = deepcopy(self.y_prev)
         self.freeze_done = deepcopy(self.terminated)
         self.freeze_u = deepcopy(self.u)
+        self.freeze_day_of_year = deepcopy(self.day_of_year)
+        self.freeze_hour_of_day = deepcopy(self.hour_of_day)
 
     def unfreeze(self) -> None:
         """
         Function that unfreezes the current state of the environment.
         This is used to restore the state of the environment after it has been frozen.
         """
-        self.timestep       = deepcopy(self.freeze_k)
-        self.x              = deepcopy(self.freeze_x)
-        self.x_prev         = deepcopy(self.freeze_x_prev)
-        self.obs            = deepcopy(self.freeze_observation)
+        self.timestep = deepcopy(self.freeze_k)
+        self.x = deepcopy(self.freeze_x)
+        self.x_prev = deepcopy(self.freeze_x_prev)
+        self.obs = deepcopy(self.freeze_observation)
         # self.y              = deepcopy(self.freeze_y)
         # self.y_prev         = deepcopy(self.freeze_y_prev)
-        self.done           = deepcopy(self.freeze_done)
-        self.u              = deepcopy(self.freeze_u)
-
+        self.done = deepcopy(self.freeze_done)
+        self.u = deepcopy(self.freeze_u)
+        self.day_of_year = deepcopy(self.freeze_day_of_year)
+        self.hour_of_day = deepcopy(self.freeze_hour_of_day)
 
     def _terminalState(self) -> bool:
         """
@@ -176,7 +179,7 @@ class TomatoEnv(GreenLightEnv):
 
         # update time
         self.day_of_year += (self.dt/self.c) % 365
-        self.hour_of_day +=  (self.dt/3600)
+        self.hour_of_day += (self.dt/3600)
         self.hour_of_day = self.hour_of_day % 24
 
         self.obs = self._get_obs()
@@ -274,12 +277,24 @@ class TomatoEnv(GreenLightEnv):
             "controls": self.u,
         }
 
-    def set_crop_state(self, cBuf: float, cLeaf: float, cStem: float, cFruit: float, tCanSum: float):
+    def set_crop_state(self, cBuf: float, cLeaf: float, cStem: float, cFruit: float, tCanSum: float) -> None:
         self.x[22] = cBuf
         self.x[23] = cLeaf
         self.x[24] = cStem
         self.x[25] = cFruit
         self.x[26] = tCanSum
+
+    def set_env_state(self, x, x_prev, u, timestep, hour_of_day, day_of_year) -> None:
+        self.x = np.copy(x)
+        self.x_prev = np.copy(x_prev)
+
+        self.timestep = timestep
+        self.u = np.copy(u).ravel()
+        # d = self.get_d().ravel()
+        self.day_of_year = day_of_year
+        self.hour_of_day = hour_of_day
+        self.obs = self._get_obs()
+        # self.obs = np.concatenate([y, self.u, [self.timestep], d], dtype=np.float32)
 
     def reset(self, seed: Optional[int] = None) -> Tuple[np.ndarray, Dict[str, Any]]:
         super().reset(seed=seed)

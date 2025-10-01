@@ -22,6 +22,19 @@ OPTIMIZER = {"ADAM": Adam}
 ENVS = {"TomatoEnv": TomatoEnv}
 
 def load_env(env_id, model_name, env_base_params, env_specific_params, load_path):
+    """    
+    Loads and configures a vectorized and normalized environment for evaluation.
+
+    Args:
+        env_id (str): The environment ID to create (e.g., 'CartPole-v1').
+        model_name (str): The name of the model, used to locate saved normalization statistics.
+        env_base_params (dict): Base parameters for environment creation.
+        env_specific_params (dict): Environment-specific parameters for environment creation.
+        load_path (str): Path to the directory containing saved environment normalization statistics.
+
+    Returns:
+        VecNormalize: The loaded and configured normalized environment, ready for evaluation.
+    """
     env_base_params["training"] = False
     # Setup new environment for training
     env = make_vec_env(
@@ -37,7 +50,6 @@ def load_env(env_id, model_name, env_base_params, env_specific_params, load_path
     env = VecNormalize.load(join(load_path, "envs", f"{model_name}/best_vecnormalize.pkl"), env)
     env.training = False
     env.norm_reward = False
-
     return env
 
 
@@ -85,30 +97,8 @@ def make_vec_env(
         if eval_env:
             env.training = False
             env.norm_reward = False
-    # env.seed(seed=seed) DO WE NEED TO SEED ENVS HERE??
     return env
 
-    # with open(join(path, algorithm + ".yml"), "r") as f:
-    #     params = yaml.load(f, Loader=yaml.FullLoader)
-
-    # model_params = params[env_id]
-
-    # if "policy_kwargs" in model_params.keys():
-    #     model_params["policy_kwargs"]["activation_fn"] = \
-    #         ACTIVATION_FN[model_params["policy_kwargs"]["activation_fn"]]
-    #     model_params["policy_kwargs"]["optimizer_class"] = \
-    #         OPTIMIZER[model_params["policy_kwargs"]["optimizer_class"]]
-    #     model_params["policy_kwargs"]["log_std_init"] = \
-    #         eval(model_params["policy_kwargs"]["log_std_init"])
-
-    # if model_params["learning_rate_schedule"]:
-    #     model_params["learning_rate"] = linear_schedule(**model_params["learning_rate_schedule"])
-    #     del model_params["learning_rate_schedule"]
-
-    # # if "learning_rate_scheduler" in model_params.keys():
-    # #     model_params["learning_rate"] = linear_schedule(**model_params["learning_rate_scheduler"])
-    # #     del model_params["learning_rate_scheduler"]
-    # return model_params
 
 def load_rl_hyperparams(env_id: str, algorithm: str) -> Dict[str, Any]:
     with open(join("configs/agents/", algorithm + ".yml"), "r") as f:
