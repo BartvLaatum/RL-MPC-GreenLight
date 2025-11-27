@@ -17,7 +17,6 @@ class RuleBasedController:
         heat_deadzone,
         co2_day,
         vent_heat_Pband,
-        rh_max,
         mech_dehumid_Pband,
         vent_rh_Pband,
         t_vent_off,
@@ -48,7 +47,6 @@ class RuleBasedController:
         self.heat_deadzone = heat_deadzone
         self.co2_day = co2_day
         self.vent_heat_Pband = vent_heat_Pband
-        self.rh_max = rh_max
         self.mech_dehumid_Pband = mech_dehumid_Pband
         self.vent_rh_Pband = vent_rh_Pband
         self.t_vent_off = t_vent_off
@@ -153,7 +151,7 @@ class RuleBasedController:
 
         # Ventilation setpoint due to excess humidity [°C]
         # mechallowed = 1 if mechanical ventilation is allowed, 0 otherwise We have have it at zero
-        ventRh = self.proportional_control(rhIn, self.rh_max + 0 * self.mech_dehumid_Pband, self.vent_rh_Pband, 0, 1)
+        ventRh = self.proportional_control(rhIn, self.rhMax + 0 * self.mech_dehumid_Pband, self.vent_rh_Pband, 0, 1)
 
         # Ventilation closure due to too cold temperatures 
         ventCold = self.proportional_control(x[2], heatSetPoint-self.t_vent_off, self.vent_cold_Pband, 1, 0)
