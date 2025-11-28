@@ -5,7 +5,7 @@ from stable_baselines3 import PPO
 
 from controllers.rlmpc import RLMPC
 from experiments.mpc_experiment_managers import RLMPCExperimentManager
-from common.utils import load_rl_env_params, load_mpc_params, load_rl_hyperparams, load_env
+from common.utils import load_model_hyperparams, load_rl_env_params, load_mpc_params, load_rl_hyperparams, load_env
 from common.results import Results
 from environments.utils import convert_rh_ppm
 
@@ -14,7 +14,6 @@ ALGS = {
     }
 
 def main(args: argparse.Namespace):
-
     load_path = os.path.join("train_data", args.project, args.algorithm, "deterministic")
     save_dir = os.path.join("results", args.project, "deterministic", "rlmpc", args.experiment_name)
 
@@ -29,8 +28,9 @@ def main(args: argparse.Namespace):
     base_env_params["season_length"] += args.horizon/24
 
     # load the hyperparameter for MPC and RL
-    mpc_params = load_mpc_params(args.env_id)
-    hyperparameters = load_rl_hyperparams(args.env_id, args.algorithm)
+    mpc_params = load_model_hyperparams("mpc", args.env_id)
+    # hyperparameters = load_model_hyperparams(args.algorithm, args.env_id)
+
     eval_env = load_env(args.env_id, args.model_name, base_env_params, specific_env_params, load_path)
     eval_env.reset()
     model = ALGS[args.algorithm].load(rl_model_path, env=eval_env, device="cpu")
@@ -45,10 +45,10 @@ def main(args: argparse.Namespace):
     month = "june"
     Np = int(args.horizon * 3600 / dt)  # Convert hours to steps
 
-    print(f"Running {args.method} method")
+    print(f"Running RL-MPC method...")
 
-    if args.method == "finite-difference":
-        mpc_params["nlp_opts"]["ipopt"]["jacobian_approximation"] = "finite-difference-values"
+    # if args.method == "finite-difference":
+    #     mpc_params["nlp_opts"]["ipopt"]["jacobian_approximation"] = "finite-difference-values"
 
     rlmpc = RLMPC(
         nx,
@@ -75,14 +75,8 @@ def main(args: argparse.Namespace):
         extend_ocp_region=args.extend_ocp_region
     )
 
-    if args.method == "exact":
-        print("multi")
-        rlmpc.define_nlp_multi()
-        exp.solve_nmpc_multi()
-    elif args.method == "finite-difference":
-        # ["nlp_opts"]["ipopt"]["jacobian_approximation"] = "finite-difference-values"
-        rlmpc.define_nlp()
-        exp.solve_nmpc()
+    rlmpc.define_nlp_multi()
+    exp.solve_nmpc_multi()
 
     result_columns = eval_env.env_method("get_obs_names")[0][:23]
     result_columns.extend(["Rewards",  "EPI", "Penalty"])
@@ -91,7 +85,7 @@ def main(args: argparse.Namespace):
     result = Results(result_columns)
 
     exp.X = convert_rh_ppm(exp.X)
-    exp.save_data(save_dir, "", args.horizon)
+    exp.save_data(save_dir, args.horizon)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -102,7 +96,7 @@ if __name__ == "__main__":
     parser.add_argument("--algorithm", type=str, default="ppo")
     parser.add_argument("--model_name", type=str, default="graceful-planet-22")
     parser.add_argument("--horizon", type=int, default=1, help="Prediction horizon in hours")
-    parser.add_argument("--method", type=str, default="exact", choices=["exact", "finite-difference"])
+    # parser.add_argument("--method", type=str, default="exact", choices=["exact", "finite-difference"])
     parser.add_argument("--region_range", type=float, default=0.05, help="Region range")
     parser.add_argument("--experiment_name", type=str, required=True, help="Name of the experiment")
     parser.add_argument("--offline_rl", action=argparse.BooleanOptionalAction, help="Use offline RL trajectory")

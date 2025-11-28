@@ -290,7 +290,7 @@ class MPCExperimentManager:
 
         print(f"Average solver time per iteration: {np.mean(self.exec_time)} (s)")
 
-    def save_data(self, save_dir, approach, horizon):
+    def save_data(self, save_dir, horizon):
         """Save the data to a file."""
         os.makedirs(save_dir, exist_ok=True)
         np.savetxt(f"{save_dir}/control-inputs-cs-{int(self.mpc.dt)}dt-{horizon}H.csv", self.U.T, delimiter=",")
@@ -447,64 +447,3 @@ class RLMPCExperimentManager(MPCExperimentManager):
             self.rewards[ll, :] = self.EPI[ll, :] - self.penalties[ll, :]
 
         print(f"Average solver time per iteration: {np.mean(self.exec_time)} (s)")
-
-def solver_opts(method):
-    nlp_opts = {}
-    nlp_opts["ipopt.print_level"] = 2
-    nlp_opts["ipopt.warm_start_init_point"] = "yes"
-    nlp_opts["ipopt.max_iter"] = 1000
-    nlp_opts["ipopt.tol"] = 1e-2
-    nlp_opts["ipopt.acceptable_tol"] = 0.1    
-    nlp_opts["ipopt.acceptable_constr_viol_tol"] = 0.1    
-    nlp_opts["print_time"] = True
-    nlp_opts["ipopt.linear_solver"] = "ma57"
-
-    if method == "finite-difference":
-        nlp_opts["ipopt.jacobian_approximation"] = "finite-difference-values"
-        nlp_opts["ipopt.hessian_approximation"] = "limited-memory"
-
-    elif method == "exact":
-        nlp_opts["ipopt.jacobian_approximation"] = "exact"
-        nlp_opts["ipopt.hessian_approximation"] = "limited-memory"
-    return nlp_opts
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--method", type=str, choices=["exact", "finite-difference"], required=True)
-    parser.add_argument("--approach", type=str, choices=["single", "multi"], required=True)
-    parser.add_argument("--horizon", type=int, default=1, help="Prediction horizon in hours")
-    args = parser.parse_args()
-
-    n_params = 208
-    nx = 28
-    nu = 6
-    ns = 6
-    nd = 10
-    dt = 300.
-    n_days = 0.25
-    month = "june"
-    Np = int(args.horizon * 3600 / dt)  # Convert horizon in hours to number of steps
-
-    print(f"Running {args.method} method")
-    print(f"Using {args.approach}-shooting approach")
-    nlp_opts1 = solver_opts(args.method)
-    nlp_opts = load_model_hyperparams("mpc", "TomatoEnv")
-    from pprint import pprint
-    pprint(nlp_opts1)
-    pprint(nlp_opts)
-
-    mpc = MPC(nx, nu, ns, n_params, nd, dt, Np, nlp_opts1)
-    exp = MPCExperimentManager(mpc, month, n_days, args.method)
-
-    if args.approach == "single":
-        exp.mpc.define_nlp()
-        exp.solve_nmpc()
-    elif args.approach == "multi":
-        mpc.define_nlp_multi()
-        exp.solve_nmpc_multi()
-
-    exp.X = convert_rh_ppm(exp.X)
-    exp.save_data(args.approach, args.horizon)
-
-if __name__ == "__main__":
-    main()
