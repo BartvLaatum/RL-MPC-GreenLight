@@ -81,7 +81,7 @@ class BasicCropObservations(BaseObservations):
     """
     def __init__(self, env) -> None:
         self.env = env
-        self.obs_names = ["24CanTemp", "cFruit", "tSum"]
+        self.obs_names = ["cFruit"]
         self.n_obs = len(self.obs_names)
 
     def observation_space(self):
@@ -91,7 +91,7 @@ class BasicCropObservations(BaseObservations):
         """
         Compute, and retrieve observations from GreenLight and the weather.
         """
-        crop_obs = np.array(self.env.x)[[21, 25, 26]]
+        crop_obs = np.array(self.env.x)[[25]]
         return crop_obs
 
 class ControlObservations(BaseObservations):
@@ -140,7 +140,7 @@ class TimeObservations(BaseObservations):
     """
     def __init__(self, env) -> None:
         self.env = env
-        self.obs_names = ["timestep", "day of year sin", "day of year cos", "hour of day sin", "hour of day cos"]
+        self.obs_names = ["day of year sin", "day of year cos", "hour of day sin", "hour of day cos"]
         self.n_obs = len(self.obs_names)
 
     def observation_space(self):
@@ -158,7 +158,7 @@ class TimeObservations(BaseObservations):
         hour_of_day_sin = np.sin(2 * np.pi * self.env.hour_of_day / 24.0)
         hour_of_day_cos = np.cos(2 * np.pi * self.env.hour_of_day / 24.0)
 
-        return np.array([self.env.timestep, day_of_year_sin, day_of_year_cos, hour_of_day_sin, hour_of_day_cos])
+        return np.array([day_of_year_sin, day_of_year_cos, hour_of_day_sin, hour_of_day_cos])
 
 class WeatherForecastObservations(BaseObservations):
     """Observer module, which gives control over the observations we want to our RL algorithm to use.
