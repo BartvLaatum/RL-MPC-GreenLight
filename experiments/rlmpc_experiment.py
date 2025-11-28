@@ -5,7 +5,7 @@ from stable_baselines3 import PPO
 
 from controllers.rlmpc import RLMPC
 from experiments.mpc_experiment_managers import RLMPCExperimentManager
-from common.utils import load_model_hyperparams, load_rl_env_params, load_mpc_params, load_rl_hyperparams, load_env
+from common.utils import load_model_hyperparams, load_rl_env_params, load_env
 from common.results import Results
 from environments.utils import convert_rh_ppm
 
@@ -41,14 +41,13 @@ def main(args: argparse.Namespace):
     ns = 6
     nd = 10
     dt = 300.
-    n_days = 1
+    n_days = 0.1
     month = "june"
     Np = int(args.horizon * 3600 / dt)  # Convert hours to steps
 
     print(f"Running RL-MPC method...")
-
-    # if args.method == "finite-difference":
-    #     mpc_params["nlp_opts"]["ipopt"]["jacobian_approximation"] = "finite-difference-values"
+    print(f"Using {args.linear_solver} linear solver")
+    mpc_params["nlp_opts"]["ipopt"]["linear_solver"] = args.linear_solver
 
     rlmpc = RLMPC(
         nx,
@@ -101,6 +100,7 @@ if __name__ == "__main__":
     parser.add_argument("--terminal_constraint", action=argparse.BooleanOptionalAction, help="Enable terminal constraint in MPC")
     parser.add_argument("--terminal_penalty", action=argparse.BooleanOptionalAction, help="Enable terminal constraint in MPC")
     parser.add_argument("--extend_ocp_region", action=argparse.BooleanOptionalAction, help="Extend OCP region")
+    parser.add_argument("--linear_solver", type=str, default="ma57", help="Linear solver to use")
     args = parser.parse_args()
 
     main(args)

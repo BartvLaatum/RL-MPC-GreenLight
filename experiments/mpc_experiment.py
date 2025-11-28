@@ -16,7 +16,7 @@ def main(args: argparse.Namespace):
     ns = 6
     nd = 10
     dt = 300.
-    n_days = 1
+    n_days = 0.1
     month = "june"
     Np = int(args.horizon * 3600 / dt)  # Convert horizon in hours to number of steps
 
@@ -27,7 +27,7 @@ def main(args: argparse.Namespace):
 
     nlp_opts["ipopt"]["linear_solver"] = args.linear_solver
     mpc = MPC(nx, nu, ns, n_params, nd, dt, Np, nlp_opts)
-    exp = MPCExperimentManager(mpc, month, n_days, args.method)
+    exp = MPCExperimentManager(mpc, month, n_days)
 
     mpc.define_nlp_multi()
     exp.solve_nmpc_multi()
