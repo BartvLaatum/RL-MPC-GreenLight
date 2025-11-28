@@ -19,9 +19,8 @@ class MPCExperimentManager:
     def __init__(
             self,
             mpc: MPC,
-            month,
-            n_days,
-            method,
+            month: str,
+            n_days: int,
         ):
 
         self.mpc = mpc
@@ -29,7 +28,6 @@ class MPCExperimentManager:
         self.L = n_days*86400
         self.t = np.arange(0, self.L, mpc.dt)
         self.N = len(self.t)
-        self.method = method
         self.exec_time = np.zeros((self.N, 1))
         self.hour_conversion = 3600/mpc.dt
 
@@ -307,13 +305,12 @@ class RLMPCExperimentManager(MPCExperimentManager):
         rl_mpc: MPC,
         month: str,
         n_days: int,
-        method: str,
         offline_rl: bool = False,
         extend_ocp_region: bool = True,
     ):
         self.offline_rl = offline_rl
         self.extend_ocp_region = extend_ocp_region
-        super().__init__(rl_mpc, month, n_days, method)
+        super().__init__(rl_mpc, month, n_days)
 
     def solve_nmpc_multi(self):
         """

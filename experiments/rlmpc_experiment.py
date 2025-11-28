@@ -70,7 +70,6 @@ def main(args: argparse.Namespace):
         rlmpc, 
         month,
         n_days,
-        args.method,
         offline_rl=args.offline_rl,
         extend_ocp_region=args.extend_ocp_region
     )
@@ -96,15 +95,12 @@ if __name__ == "__main__":
     parser.add_argument("--algorithm", type=str, default="ppo")
     parser.add_argument("--model_name", type=str, default="graceful-planet-22")
     parser.add_argument("--horizon", type=int, default=1, help="Prediction horizon in hours")
-    # parser.add_argument("--method", type=str, default="exact", choices=["exact", "finite-difference"])
     parser.add_argument("--region_range", type=float, default=0.05, help="Region range")
     parser.add_argument("--experiment_name", type=str, required=True, help="Name of the experiment")
     parser.add_argument("--offline_rl", action=argparse.BooleanOptionalAction, help="Use offline RL trajectory")
     parser.add_argument("--terminal_constraint", action=argparse.BooleanOptionalAction, help="Enable terminal constraint in MPC")
     parser.add_argument("--terminal_penalty", action=argparse.BooleanOptionalAction, help="Enable terminal constraint in MPC")
     parser.add_argument("--extend_ocp_region", action=argparse.BooleanOptionalAction, help="Extend OCP region")
-    # parser.add_argument("--use_trained_vf", action="store_true")
     args = parser.parse_args()
 
     main(args)
-
