@@ -7,8 +7,8 @@ import numpy as np
 import casadi as ca
 
 from controllers.mpc import MPC
-from common.utils import init_state
-from environments.utils import load_dummy_weather, convert_rh_ppm
+from common.utils import load_model_hyperparams
+from environments.utils import load_dummy_weather, convert_rh_ppm, init_state
 from model.parameters import init_default_params
 
 # from visualizations.trajectories import plot_control_trajectories, plot_states
@@ -39,7 +39,13 @@ class MPCExperimentManager:
         self.solver_failure = np.zeros((self.N, 1)) 
 
         # Load or define your disturbance trajectory
-        self.d_values = load_dummy_weather(self.N+mpc.Np, mpc.dt, month=month)
+        self.d_values = load_dummy_weather(
+            season_length=n_days,
+            start_day=0,
+            dt=mpc.dt,
+            pred_horizon=mpc.Np,
+            month=month
+        )
 
         self.x0 = init_state(self.d_values[0], 85.0, 0.0)
         self.X = np.zeros((mpc.nx, self.N+1))
@@ -442,105 +448,6 @@ class RLMPCExperimentManager(MPCExperimentManager):
 
         print(f"Average solver time per iteration: {np.mean(self.exec_time)} (s)")
 
-    # def solve_nmpc(self):
-    #     """
-    #     Solve the nonlinear MPC problem.
-
-    #     Args:
-    #         p (Dict[str, Any]): the model parameters
-
-    #     Returns:
-    #         np.ndarray: the optimal control inputs
-    #         float: the cost value
-    #         np.ndarray: the constraints
-    #         Dict[str, Any]: the optimization output
-    #         np.ndarray: the control input changes
-    #         np.ndarray: the gradient of the cost function
-    #         np.ndarray: the hessian of the cost function
-    #     """
-    #     u_min = [0.0] * (self.mpc.nu * self.mpc.Np)   # Lower bounds input
-    #     u_max = [1.0] * (self.mpc.nu * self.mpc.Np)   # Upper bounds input
-    #     s_min = [-ca.inf] * (self.mpc.ns * self.mpc.Np)   # Lower bounds slack
-    #     s_max = [ca.inf] * (self.mpc.ns * self.mpc.Np)   # Upper bounds slack
-    #     xn_min = [-ca.inf] * (3)   # Lower bounds terminal state
-    #     xn_max = [ca.inf] * (3) # upper bounds terminal state
-    #     w_min = u_min + s_min + xn_min
-    #     w_max = u_max + s_max + xn_max
-
-    #     self.mpc.eval_env.reset()
-    #     # Generate roll-outs using the RL policy
-    #     logs = self.mpc.unroll_actor(horizon=self.mpc.Np)
-    #     rl_guess_xs = np.array(logs["x"])
-
-    #     # Extract the initial guesses for control inputs and states from roll-out logs
-    #     u_init = np.array(logs["u"])
-
-    #     rl_guess_xs[:, -1]  # Last state from the roll-out
-    #     s_init = np.zeros((self.mpc.ns, self.mpc.Np))
-    #     s_init.T.flatten()
-    #     w_init = np.concatenate([u_init.T.flatten(), s_init.T.flatten(), rl_guess_xs[:, -1]])
-    #     for ll in tqdm(range(self.N)):
-    #         t = time.time()
-    #         reshape_d = np.concatenate(self.d_values[ll:ll+self.mpc.Np, :])
-
-    #         p_all = ca.vertcat(self.X[:, ll], self.U[:, ll], reshape_d, self.p, rl_guess_xs[:, -1])
-    #         # Set up initial guess and bounds for decision variables
-    #         # Set up constraints bounds
-
-    #         # g_min = [*-self.mpc.du_max]*self.mpc.Np  # Lower bounds on constraints
-    #         # g_max = [*self.mpc.du_max]*self.mpc.Np   # Upper bounds on constraints
-    #         solution = self.mpc.solver_single(
-    #             x0=ca.DM(w_init),
-    #             lbx=ca.DM(w_min),
-    #             ubx=ca.DM(w_max),
-    #             lbg=ca.DM(self.mpc.lbg),
-    #             ubg=ca.DM(self.mpc.ubg),
-    #             p=p_all
-    #         )
-
-    #         # Extract the optimal control inputs from the solution
-    #         w_opt = solution["x"].full().flatten()
-    #         us_opt = w_opt[:self.mpc.nu*self.mpc.Np].reshape(self.mpc.Np, self.mpc.nu).T
-    #         s_opt = w_opt[-(self.mpc.ns*self.mpc.Np):].reshape(self.mpc.Np, self.mpc.ns).T     
-
-
-    #         # simulate the next time step
-    #         self.U[:, ll+1] = us_opt[:, 0]
-    #         res = self.mpc.F(x0=self.X[:,ll], u=self.U[:, ll+1], p=ca.vertcat(*[reshape_d[:self.mpc.nd], self.p]))
-    #         self.X[:, ll+1] = res["xf"].toarray().ravel()
-    #         self.exec_time[ll, :] = time.time()-t
-
-    #         # Set the environment state for the next roll-out
-    #         day_of_year = self.mpc.eval_env.get_attr("day_of_year")[0] + (self.mpc.dt/86400) % 365
-    #         hour_of_day = (self.mpc.eval_env.get_attr("hour_of_day")[0] + (self.mpc.dt/3600)) % 24
-    #         self.mpc.eval_env.env_method(
-    #             "set_env_state", 
-    #             *(self.X[:, ll], self.X[:,ll-1], self.U[:,ll], ll, hour_of_day, day_of_year)
-    #         )
-    #         # generate new roll-outs using the RL policy
-    #         logs = self.mpc.unroll_actor(horizon=self.mpc.Np)
-
-    #         u_init = np.array(logs["u"])
-    #         rl_guess_xs = np.array(logs["x"])
-
-    #         # Update the initial guess for the next iteration; using the rolled previous solution 
-    #         u_init = np.concatenate([us_opt[:, 1:].T.flatten(), us_opt[:, -1].T.flatten()])
-    #         s_init = np.concatenate([s_opt[:, 1:].T.flatten(), s_opt[:, -1].T.flatten()])
-    #         w_init = np.concatenate([u_init, s_init, rl_guess_xs[:, -1]])
-
-    #         # Compute closed-loop performance
-    #         self.EPI[ll, :] = \
-    #             (self.X[25, ll+1]-self.X[25, ll])* 1e-6 / 0.06 * 1.2 - \
-    #             (0.09 * self.p[108]/self.p[46] * 1e-3 * us_opt[:, 0][0]/self.hour_conversion + \
-    #             0.2 * self.p[172] * 1e-3 * us_opt[:, 0][4]/self.hour_conversion + \
-    #             0.3 * us_opt[:, 0][1]* self.p[109]/self.p[46] * 1e-6 * self.mpc.dt)
-    #         self.penalties[ll, :] = self.mpc.compute_penalties(self.X[:,ll+1])
-
-    #         self.rewards[ll, :] = self.EPI[ll, :] - self.penalties[ll, :]
-
-    #     print(f"Average solver time per iteration: {np.mean(self.exec_time)} (s)")
-
-
 def solver_opts(method):
     nlp_opts = {}
     nlp_opts["ipopt.print_level"] = 2
@@ -580,9 +487,13 @@ def main():
 
     print(f"Running {args.method} method")
     print(f"Using {args.approach}-shooting approach")
-    nlp_opts = solver_opts(args.method)
+    nlp_opts1 = solver_opts(args.method)
+    nlp_opts = load_model_hyperparams("mpc", "TomatoEnv")
+    from pprint import pprint
+    pprint(nlp_opts1)
+    pprint(nlp_opts)
 
-    mpc = MPC(nx, nu, ns, n_params, nd, dt, Np, nlp_opts)
+    mpc = MPC(nx, nu, ns, n_params, nd, dt, Np, nlp_opts1)
     exp = MPCExperimentManager(mpc, month, n_days, args.method)
 
     if args.approach == "single":

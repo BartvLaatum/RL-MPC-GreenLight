@@ -5,8 +5,7 @@ import numpy as np
 import casadi as ca
 
 from controllers.baseline import RuleBasedController
-from environments.utils import load_dummy_weather, co2dens2ppm, vaporPres2rh, convert_rh_ppm
-from common.utils import define_model, init_state
+from environments.utils import load_dummy_weather, co2dens2ppm, vaporPres2rh, convert_rh_ppm, define_model, init_state
 from model.parameters import init_default_params
 from common.utils import load_model_hyperparams
 
@@ -41,11 +40,12 @@ env_id = "TomatoEnv"
 nx, nu, nd, n_params, dt = 28, 6, 10, 208, 300
 dt = 300.
 n_days = 1
+start_day = 151
 month = "june"
 L = n_days*86400
 t = np.arange(0, L, dt)
 N = len(t)
-d = load_dummy_weather(N, dt, month=month)
+d = load_dummy_weather(n_days, start_day, dt, month=month)
 F = define_model(nx, nu, nd, n_params, dt)
 
 # initiate Rule-Based Controller

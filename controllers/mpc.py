@@ -4,8 +4,7 @@ import casadi as ca
 import numpy as np
 
 
-from common.utils import define_model
-from environments.utils import co2dens2ppm, vaporPres2rh
+from environments.utils import co2dens2ppm, vaporPres2rh, define_model
 
 class MPC:
     solver: ca.Function

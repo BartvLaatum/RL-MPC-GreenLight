@@ -6,18 +6,22 @@ from copy import deepcopy
 from datetime import datetime, timedelta
 
 import numpy as np
+import casadi as ca
 from pandas._typing import ArrayLike
 import pandas as pd
 from scipy.interpolate import PchipInterpolator
 
+from model.ode import ODE
 
-def load_dummy_weather(season_lenght: int, start_day: int, dt: float, pred_horizon: int, month: str = 'june') -> np.ndarray:
+def load_dummy_weather(season_length: int, start_day: int, dt: float, pred_horizon: int, month: str = 'june') -> np.ndarray:
     """
     Load dummy weather data from a CSV file.
     
     Args:
-        N: Number of timesteps to load.
+        season_length: Number of timesteps to load.
+        start_day: Start day of the year.
         dt: Sample time in seconds.
+        pred_horizon: Prediction horizon time steps.
         month: Month to load data from (default: 'june').
     
     Returns:
@@ -25,7 +29,7 @@ def load_dummy_weather(season_lenght: int, start_day: int, dt: float, pred_horiz
     """
     try:
         df = pd.read_csv(f"weather/{month}/weather-{int(dt)}dt.csv")
-        N = int(np.ceil(season_lenght * 86400 / dt)) + pred_horizon +1
+        N = int(np.ceil(season_length * 86400 / dt)) + pred_horizon + 1
         weather_data = df.head(N).values
     except FileNotFoundError:
         raise FileNotFoundError(f"Error: Could not open weather data file for {month}")
@@ -234,15 +238,6 @@ def dailLightSum(time: np.ndarray, rad: np.ndarray, c: int):
                 mnAfter = mnAfter[0]
     return lightSum*interval*1e-6
 
-# def sat_vp(temp):
-#     return .61078*np.exp(17.2694*temp/(temp+238.3))
-
-# def actual_vp(temp, rh):
-#     return sat_vp(temp)*(rh/100)
-
-# def hum_deficit(temp, rh):
-#     return sat_vp(temp) - actual_vp(temp, rh)
-
 def soilTempNl(time):
     # SOILTEMPNL An estimate of the soil temperature in the Netherlands in a given time of year
     # Based on Figure 3 in 
@@ -347,7 +342,8 @@ def co2dens2ppm(temp, dens):
     return 1e6 * R * (temp + C2K) * dens / (P * M_CO2)
 
 def vaporPres2rh(temp, vaporPres):
-    return np.clip(100*vaporPres/satVp(temp), a_min=0., a_max=100.)
+    rh = 100 * vaporPres / satVp(temp)
+    return ca.fmax(0., ca.fmin(rh, 100.))
 
 def vaporDens2rh(temp, vaporDens):
     """
@@ -480,3 +476,57 @@ if __name__ == "__main__":
         nd=10
     )
     np.savetxt(f"weather/{args.month}/weather-{int(args.dt)}dt.csv", weather, delimiter=",")
+
+
+def define_model(nx: int, nu: int, nd: int, n_params: int, dt: float) -> ca.Function:
+    # Define the symbolic variables for CasADi
+    x = ca.SX.sym("x", nx)
+    u = ca.SX.sym("u", nu)
+    d = ca.SX.sym("d", nd)
+    p = ca.SX.sym("p", n_params)
+
+    dxdt = ODE(x, u, d, p)
+    input_args_sym = ca.vertcat(d, p)
+
+    int_opts = {"abstol": 1e-4, "reltol": 1e-4, "max_num_steps": 7e4}
+    # int_opts = {}
+    F = ca.integrator(
+        "F", "cvodes",
+        {"x": x, "u": u, "p": input_args_sym, "ode": dxdt},
+        0.0, dt, int_opts
+    )
+
+    return F
+
+def init_state(d0, rhMax, time_in_days):
+    """Initialize greenhouse state vector"""
+    state = np.zeros(28)
+    state[0] = d0[3]        # co2Air
+    state[1] = state[0]     # co2Top
+    state[2] = 18.5         # tAir
+    state[3] = state[2]     # tTop
+    state[4] = state[2] + 4 # tCan
+    state[5] = state[2]     # tCovIn
+    state[6] = state[2]     # tCovE
+    state[7] = state[2]     # tThScr
+    state[8] = state[2]     # tFlr
+    state[9] = state[2]     # tPipe
+    state[10] = state[2]    # tSoil1
+    state[11] = .25*(3.*state[2] + d0[6])   # tSoil2
+    state[12] = .25*(2.*state[2] + 2*d0[6]) # tSoil3
+    state[13] = .25*(state[2] + 3*d0[6])    # tSoil4
+    state[14] = d0[6]       # tSoil5
+    state[15] = rhMax / 100. * satVp(state[2])  # vpAir
+    state[16] = state[15]   # vpTop
+    state[17] = state[2]    # tLamp
+    state[18] = state[2]    # tIntLamp
+    state[19] = state[2]    # tGroPipe
+    state[20] = state[2]    # tBlScr
+    state[21] = state[4]    # tCan24
+    state[22] = 1000.       # cBuf
+    state[23] = 9.5283e4    # cLeaf
+    state[24] = 2.5107e5    # cStem
+    state[25] = 5.5338e4    # cFruit
+    state[26] = 3.0978e3    # tCanSum
+    state[27] = time_in_days # time
+    return state

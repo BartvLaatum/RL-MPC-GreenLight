@@ -12,8 +12,7 @@ from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
 from environments.tomato_env import TomatoEnv
-from environments.utils import co2ppm2dens, rh2vaporDens
-from common.utils import define_model 
+from environments.utils import co2ppm2dens, rh2vaporDens, define_model 
 
 class RLMPC(MPC):
     def __init__(
