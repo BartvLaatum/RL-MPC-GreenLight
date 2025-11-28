@@ -1,5 +1,4 @@
 import os
-import argparse
 import gc
 import numpy as np
 
@@ -12,8 +11,6 @@ from stable_baselines3 import PPO, SAC
 from stable_baselines3.common.noise import NormalActionNoise, OrnsteinUhlenbeckActionNoise
 
 from common.utils import (
-    load_model_hyperparams,
-    load_rl_env_params,
     wandb_init, 
     make_vec_env, 
     create_callbacks, 
@@ -42,7 +39,7 @@ def get_obs_names(env):
             obs_names.append(name.replace("_", " "))
     return obs_names
 
-class ExperimentManager:
+class RLExperimentManager:
     """Class to manage reinforcement learning experiments."""
     def __init__(
         self,
@@ -61,7 +58,9 @@ class ExperimentManager:
         save_model=True,
         save_env=True,
         hp_tuning=False,
-        device="cpu"
+        device="cpu",
+        frame_stack=False,
+        n_stack=1,
     ):
         """
         Initialize the ExperimentManager with the given parameters.
@@ -79,9 +78,8 @@ class ExperimentManager:
             model_seed (int): Seed for the model.
             save_model (bool): Whether to save the model.
             save_env (bool): Whether to save the environment.
-            continue_training (bool): Whether to continue training from a saved model.
-            continued_project (str): Project name of the saved model to continue training from.
-            continued_runname (str): Run name of the saved model to continue training from.
+            frame_stack (bool): Whether to use frame stacking.
+            n_stack (int): Number of frames to stack.
         """
         self.env_id = env_id
         self.project = project
@@ -102,16 +100,13 @@ class ExperimentManager:
         self.save_model = save_model
         self.save_env = save_env
         self.device = device
-        # self.continue_training = continue_training
-        # self.continued_project = continued_project
-        # self.continued_runname = continued_runname
+        self.frame_stack = frame_stack
+        self.n_stack = n_stack
         self.hp_tuning = hp_tuning
         self.models = {"ppo": PPO, "sac": SAC}
 
         self.model_class = self.models[self.algorithm.lower()]
 
-        # Load environment and model parameters
-        self.hyp_config_path = f"gl_gym/configs/sweeps/"
 
 
         # Initialize the environments
@@ -152,7 +147,9 @@ class ExperimentManager:
             seed=self.env_seed,
             n_envs=self.n_envs,  # Number of environments to run in parallel
             monitor_filename=self.monitor_filename,
-            vec_norm_kwargs=vec_norm_kwargs
+            vec_norm_kwargs=vec_norm_kwargs,
+            frame_stack=self.frame_stack,
+            n_stack=self.n_stack,
         )
 
         self.env_base_params["training"] = False
@@ -165,6 +162,8 @@ class ExperimentManager:
             monitor_filename=self.monitor_filename,
             vec_norm_kwargs=vec_norm_kwargs,
             eval_env=True,
+            frame_stack=self.frame_stack,
+            n_stack=self.n_stack,
         )
 
 
@@ -184,7 +183,7 @@ class ExperimentManager:
         self.model = self.model_class(
             env=self.env,
             seed=self.model_seed,
-            verbose=1,
+            verbose=0,
             **self.model_params,
             tensorboard_log=tensorboard_log,
             device=self.device
@@ -304,7 +303,7 @@ class ExperimentManager:
         """
         self.total_timesteps = 1.5e6
         continue_sweep = False
-        sweep_config = load_sweep_config(self.hyp_config_path, self.env_id, self.algorithm)
+        sweep_config = load_sweep_config("gl_gym/configs/sweeps/", self.env_id, self.algorithm)
         if continue_sweep:
             wandb.agent("puk5fznz", project="dwarf-env", function=self.run_single_sweep, count=100)
         else:
@@ -362,56 +361,3 @@ class ExperimentManager:
         self.eval_env.close()
         del self.model, self.env, self.eval_env
         gc.collect()
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--project", type=str, default="AgriControl", help="Wandb project name")
-    parser.add_argument("--env_id", type=str, default="TomatoEnv", help="Environment ID")
-    parser.add_argument("--algorithm", type=str, default="ppo", help="RL algorithm to use")
-    parser.add_argument("--group", type=str, default="group1", help="Wandb group name")
-    parser.add_argument("--n_eval_episodes", type=int, default=1, help="Number of episodes to evaluate the agent for")
-    parser.add_argument("--n_evals", type=int, default=10, help="Number times we evaluate algorithm during training")
-    parser.add_argument("--env_seed", type=int, default=666, help="Random seed for the environment for reproducibility")
-    parser.add_argument("--model_seed", type=int, default=666, help="Random seed for the RL-model for reproducibility")
-    parser.add_argument("--stochastic", action="store_true", help="Whether to run the experiment in stochastic mode")
-    parser.add_argument("--device", type=str, default="cpu", help="The device to run the experiment on")
-    parser.add_argument("--save_model", default=True, action=argparse.BooleanOptionalAction, help="Whether to save the model")
-    parser.add_argument("--save_env", default=True, action=argparse.BooleanOptionalAction, help="Whether to save the environment")
-    parser.add_argument("--hyperparameter_tuning", default=False, action=argparse.BooleanOptionalAction, help="Perform hyperparameter tuning")
-    # parser.add_argument("--continue_training", default=False, action=argparse.BooleanOptionalAction, help="Continue training from a saved model")
-    # parser.add_argument("--continued_project", type=str, default=None, help="Project name of the saved model to continue training from")
-    # parser.add_argument("--continued_runname", type=str, default=None, help="Runname of the saved model to continue training from")
-    args = parser.parse_args()
-
-    env_config_path = f"configs/envs/"
-    env_base_params, env_specific_params = load_rl_env_params(args.env_id, env_config_path)
-    hyperparameters = load_model_hyperparams(args.algorithm, args.env_id)
-    # Initialize the experiment manager
-    experiment_manager = ExperimentManager(
-        env_id=args.env_id,
-        project=args.project,
-        env_base_params=env_base_params,
-        env_specific_params=env_specific_params,
-        hyperparameters=hyperparameters,
-        group=args.group,
-        n_eval_episodes=args.n_eval_episodes,
-        n_evals=args.n_evals,
-        algorithm=args.algorithm,
-        env_seed=args.env_seed,
-        model_seed=args.model_seed,
-        stochastic=args.stochastic,
-        save_model=args.save_model,
-        save_env=args.save_env,
-        hp_tuning=args.hyperparameter_tuning,
-        device=args.device
-    )
-
-    if args.hyperparameter_tuning:
-        # Perform hyperparameter tuning
-        experiment_manager.hyperparameter_tuning()
-    else:
-    # Run the experiment
-        experiment_manager.run_experiment()
-
-if __name__ == "__main__":
-    main()

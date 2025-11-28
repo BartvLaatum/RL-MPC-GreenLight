@@ -10,7 +10,7 @@ import pandas as pd
 from torch.optim.adam import Adam
 from torch.nn.modules.activation import ReLU, SiLU, Tanh, ELU
 from wandb.integration.sb3 import WandbCallback
-from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize, VecMonitor, VecEnv
+from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize, VecMonitor, VecEnv, VecFrameStack
 
 from common.results import Results
 from common.callbacks import CustomWandbCallback, SaveVecNormalizeCallback, BaseCallback
@@ -81,7 +81,9 @@ def make_vec_env(
     n_envs: int,
     monitor_filename: str | None = None,
     vec_norm_kwargs: Dict[str, Any] | None = None,
-    eval_env: bool = False
+    eval_env: bool = False,
+    frame_stack: bool = False,
+    n_stack: int = 1,
     ) -> VecEnv:
     """
     Creates a vectorized environment, with n individual envs.
@@ -97,6 +99,8 @@ def make_vec_env(
         if eval_env:
             env.training = False
             env.norm_reward = False
+    if frame_stack:
+        env = VecFrameStack(env, n_stack)
     return env
 
 def load_model_hyperparams(algorithm: str, env_id: str) -> Dict[str, Any]:

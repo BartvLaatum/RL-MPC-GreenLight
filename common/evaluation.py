@@ -5,7 +5,7 @@ import numpy as np
 import gymnasium as gym
 
 from stable_baselines3.common import type_aliases
-from stable_baselines3.common.vec_env import VecMonitor, VecEnv, is_vecenv_wrapped
+from stable_baselines3.common.vec_env import VecMonitor, VecEnv, is_vecenv_wrapped, VecFrameStack
 
 def evaluate_policy(
     model: "type_aliases.PolicyPredictor",
@@ -70,6 +70,12 @@ def evaluate_policy(
             UserWarning,
         )
 
+    if isinstance(env, VecFrameStack):
+        n_stack = env.stacked_obs.n_stack
+    else:
+        n_stack = 1
+
+
     n_envs = env.num_envs
     episode_rewards = []
     episode_lengths = []
@@ -86,7 +92,7 @@ def evaluate_policy(
     current_rewards = np.zeros(n_envs)
     current_lengths = np.zeros(n_envs, dtype="int")
     current_actions = np.zeros((n_envs, N, env.action_space.shape[0]))
-    current_obs = np.zeros((n_envs, N, env.observation_space.shape[0]))
+    current_obs = np.zeros((n_envs, N, env.observation_space.shape[0]//n_stack))
     
     observations = env.reset()
     states = None
@@ -99,7 +105,10 @@ def evaluate_policy(
             episode_start=episode_starts,
             deterministic=deterministic,
         )
-        current_obs[:, timestep, :] = env.unnormalize_obs(observations)
+        frames = np.split(observations, n_stack, axis=1)
+        current_obs[:, timestep, :] = env.unnormalize_obs(frames[-1])
+
+        # current_obs[:, timestep, :] = env.unnormalize_obs(observations)
         new_observations, rewards, dones, infos = env.step(actions)
         current_actions[:, timestep, :] = env.get_attr("u", indices=0)[0]
 
