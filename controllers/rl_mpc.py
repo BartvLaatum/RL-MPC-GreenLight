@@ -24,7 +24,7 @@ ALGS = {
 
 
 class RLMPC(MPC):
-    solver: ca.Function
+    # solver: ca.Function
     def __init__(
         self,
         nx: int,
@@ -40,7 +40,7 @@ class RLMPC(MPC):
         eval_env: DummyVecEnv,
         model: BaseAlgorithm,
         terminal_penalty: bool = False,
-    ):
+    ) -> None:
         super().__init__(nx, nu, ns, n_params, nd, dt, Np, nlp_opts)
         self.terminal_constraint = terminal_constraint
         self.terminal_penalty = terminal_penalty

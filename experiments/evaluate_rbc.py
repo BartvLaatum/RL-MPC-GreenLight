@@ -4,7 +4,7 @@ from time import time
 import numpy as np
 import casadi as ca
 
-from agents.baseline import RuleBasedController
+from controllers.baseline import RuleBasedController
 from model.utils import define_model, init_state, load_dummy_weather, co2dens2ppm, vaporPres2rh, convert_rh_ppm
 from model.parameters import init_default_params
 from utils import load_model_hyperparams

@@ -6,7 +6,7 @@ from tqdm import tqdm
 import numpy as np
 import casadi as ca
 
-from agents.mpc import MPC
+from controllers.mpc import MPC
 from model.utils import load_dummy_weather, init_state, convert_rh_ppm, vaporDens2rh
 from model.parameters import init_default_params
 

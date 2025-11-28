@@ -3,7 +3,7 @@ import argparse
 
 from stable_baselines3 import PPO
 
-from agents.rl_mpc import RLMPC
+from controllers.rl_mpc import RLMPC
 from experiments.mpc_experiment_managers import RLMPCExperimentManager
 from common.utils import load_rl_env_params, load_mpc_params, load_rl_hyperparams, load_env
 from common.results import Results
@@ -13,24 +13,7 @@ ALGS = {
     "ppo": PPO
     }
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--project", type=str, default="GL-MPC-RL")
-    parser.add_argument("--env_id", type=str, default="TomatoEnv")
-    parser.add_argument("--save_name", type=str)
-    parser.add_argument("--weather_filename", default="weather-300dt.csv", type=str)
-    parser.add_argument("--algorithm", type=str, default="ppo")
-    parser.add_argument("--model_name", type=str, default="graceful-planet-22")
-    parser.add_argument("--horizon", type=int, default=1, help="Prediction horizon in hours")
-    parser.add_argument("--method", type=str, default="exact", choices=["exact", "finite-difference"])
-    parser.add_argument("--region_range", type=float, default=0.05, help="Region range")
-    parser.add_argument("--experiment_name", type=str, required=True, help="Name of the experiment")
-    parser.add_argument("--offline_rl", action=argparse.BooleanOptionalAction, help="Use offline RL trajectory")
-    parser.add_argument("--terminal_constraint", action=argparse.BooleanOptionalAction, help="Enable terminal constraint in MPC")
-    parser.add_argument("--terminal_penalty", action=argparse.BooleanOptionalAction, help="Enable terminal constraint in MPC")
-    parser.add_argument("--extend_ocp_region", action=argparse.BooleanOptionalAction, help="Extend OCP region")
-    # parser.add_argument("--use_trained_vf", action="store_true")
-    args = parser.parse_args()
+def main(args: argparse.Namespace):
 
     load_path = os.path.join("train_data", args.project, args.algorithm, "deterministic")
     save_dir = os.path.join("results", args.project, "deterministic", "rlmpc", args.experiment_name)
@@ -111,4 +94,23 @@ def main():
     exp.save_data(save_dir, "", args.horizon)
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--project", type=str, default="GL-MPC-RL")
+    parser.add_argument("--env_id", type=str, default="TomatoEnv")
+    parser.add_argument("--save_name", type=str)
+    parser.add_argument("--weather_filename", default="weather-300dt.csv", type=str)
+    parser.add_argument("--algorithm", type=str, default="ppo")
+    parser.add_argument("--model_name", type=str, default="graceful-planet-22")
+    parser.add_argument("--horizon", type=int, default=1, help="Prediction horizon in hours")
+    parser.add_argument("--method", type=str, default="exact", choices=["exact", "finite-difference"])
+    parser.add_argument("--region_range", type=float, default=0.05, help="Region range")
+    parser.add_argument("--experiment_name", type=str, required=True, help="Name of the experiment")
+    parser.add_argument("--offline_rl", action=argparse.BooleanOptionalAction, help="Use offline RL trajectory")
+    parser.add_argument("--terminal_constraint", action=argparse.BooleanOptionalAction, help="Enable terminal constraint in MPC")
+    parser.add_argument("--terminal_penalty", action=argparse.BooleanOptionalAction, help="Enable terminal constraint in MPC")
+    parser.add_argument("--extend_ocp_region", action=argparse.BooleanOptionalAction, help="Extend OCP region")
+    # parser.add_argument("--use_trained_vf", action="store_true")
+    args = parser.parse_args()
+
+    main(args)
+
