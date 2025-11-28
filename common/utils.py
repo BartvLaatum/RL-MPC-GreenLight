@@ -17,6 +17,7 @@ from common.results import Results
 from common.callbacks import CustomWandbCallback, SaveVecNormalizeCallback, BaseCallback
 from environments.tomato_env import TomatoEnv
 from model.ode import ODE
+from environments.utils import satVp
 
 ACTIVATION_FN = {"ReLU": ReLU, "SiLU": SiLU, "Tanh":Tanh, "ELU": ELU}
 OPTIMIZER = {"ADAM": Adam}
