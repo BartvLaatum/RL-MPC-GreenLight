@@ -7,7 +7,8 @@ import numpy as np
 import casadi as ca
 
 from controllers.mpc import MPC
-from model.utils import load_dummy_weather, init_state, convert_rh_ppm, vaporDens2rh
+from common.utils import init_state
+from environments.utils import load_dummy_weather, convert_rh_ppm
 from model.parameters import init_default_params
 
 # from visualizations.trajectories import plot_control_trajectories, plot_states

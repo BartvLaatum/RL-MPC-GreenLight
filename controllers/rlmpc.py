@@ -5,26 +5,17 @@ from typing import Any, Dict, List, Tuple
 import casadi as ca
 import numpy as np
 
-from agents.mpc import MPC
+from controllers.mpc import MPC
 
-from model.utils import define_model, co2dens2ppm, vaporPres2rh #, init_state, load_dummy_weather
 from stable_baselines3 import PPO, SAC
 from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
 from environments.tomato_env import TomatoEnv
-from common.utils import load_rl_env_params, load_mpc_params, load_rl_hyperparams, load_env
-from model.utils import co2ppm2dens, rh2vaporDens
-
-GAMMA = 1.0
-ALGS = {
-    "ppo": PPO,
-    "sac": SAC,
-}
-
+from environments.utils import co2ppm2dens, rh2vaporDens
+from common.utils import define_model 
 
 class RLMPC(MPC):
-    # solver: ca.Function
     def __init__(
         self,
         nx: int,

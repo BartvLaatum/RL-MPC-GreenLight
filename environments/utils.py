@@ -1,5 +1,6 @@
-from typing import Tuple, SupportsFloat
+import argparse
 from os.path import join
+from typing import Tuple, SupportsFloat
 
 from copy import deepcopy
 from datetime import datetime, timedelta
@@ -448,3 +449,34 @@ def compute_sky_temp(air_temp, cloud):
     sky_temp = (ld_cloud/sigma)**(0.25)-C2K           # Equation 5.22, but here assuming eps=1
     return sky_temp
 
+def convert_rh_ppm(X: np.ndarray) -> np.ndarray:
+    """
+    
+    """
+    X[0, : ] = co2dens2ppm(X[2, :], X[0, :]*1e-6)
+    X[15, :] = vaporPres2rh(X[2, :], X[15, :]).toarray().ravel()
+    return X
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--month", required=True, type=str)
+    parser.add_argument("--dt", required=True, type=float)
+    
+    args = parser.parse_args()
+    months = {
+        "january": 0,
+        "june": 151,
+    }
+    weather = load_weather_data(
+        weatherDataDir="weather/", 
+        location="",
+        source="KASPRO",
+        growthYear=2023,
+        startDay=months[args.month],
+        n_days=31,
+        predHorizon=1,
+        h=args.dt,
+        nd=10
+    )
+    np.savetxt(f"weather/{args.month}/weather-{int(args.dt)}dt.csv", weather, delimiter=",")

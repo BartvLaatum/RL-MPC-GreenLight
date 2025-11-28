@@ -1,7 +1,8 @@
 import numpy as np
 import casadi as ca
 import pandas as pd
-from model.utils import load_dummy_weather, init_state, define_model
+from common.utils import define_model, init_state
+from environments.utils import load_dummy_weather
 from model.parameters import init_default_params
 
 

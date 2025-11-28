@@ -1,5 +1,5 @@
 import numpy as np
-from model.utils import co2dens2ppm, satVp
+from environments.utils import co2dens2ppm, satVp
 
 class RuleBasedController:
     def __init__(

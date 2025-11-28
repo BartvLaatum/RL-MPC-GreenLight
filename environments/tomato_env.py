@@ -9,7 +9,7 @@ from environments.base_env import GreenLightEnv
 from environments.observations import *
 from environments.rewards import BaseReward, GreenhouseReward, DummyReward
 # from environments.models.greenlight_model import GreenLight
-from model.utils import define_model, init_state
+from common.utils import define_model, init_state
 from environments.utils import load_weather_data, load_dummy_weather
 from model.parameters import init_default_params
 from environments.noise import parametric_crop_uncertainty

@@ -13,7 +13,7 @@ from stable_baselines3.common.noise import NormalActionNoise, OrnsteinUhlenbeckA
 
 from common.utils import (
     load_rl_hyperparams,
-    load_env_params, 
+    load_rl_env_params,
     wandb_init, 
     make_vec_env, 
     create_callbacks, 
@@ -384,7 +384,7 @@ def main():
     args = parser.parse_args()
 
     env_config_path = f"configs/envs/"
-    env_base_params, env_specific_params = load_env_params(args.env_id, env_config_path)
+    env_base_params, env_specific_params = load_rl_env_params(args.env_id, env_config_path)
     hyperparameters = load_rl_hyperparams(args.algorithm, args.env_id)
     # Initialize the experiment manager
     experiment_manager = ExperimentManager(

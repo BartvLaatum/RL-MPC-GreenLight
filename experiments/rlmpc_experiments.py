@@ -3,11 +3,11 @@ import argparse
 
 from stable_baselines3 import PPO
 
-from controllers.rl_mpc import RLMPC
+from controllers.rlmpc import RLMPC
 from experiments.mpc_experiment_managers import RLMPCExperimentManager
 from common.utils import load_rl_env_params, load_mpc_params, load_rl_hyperparams, load_env
 from common.results import Results
-from model.utils import convert_rh_ppm
+from environments.utils import convert_rh_ppm
 
 ALGS = {
     "ppo": PPO
@@ -50,7 +50,7 @@ def main(args: argparse.Namespace):
     if args.method == "finite-difference":
         mpc_params["nlp_opts"]["ipopt"]["jacobian_approximation"] = "finite-difference-values"
 
-    rl_mpc = RLMPC(
+    rlmpc = RLMPC(
         nx,
         nu,
         ns,
@@ -67,7 +67,7 @@ def main(args: argparse.Namespace):
     )
 
     exp = RLMPCExperimentManager(
-        rl_mpc, 
+        rlmpc, 
         month,
         n_days,
         args.method,
@@ -77,11 +77,11 @@ def main(args: argparse.Namespace):
 
     if args.method == "exact":
         print("multi")
-        rl_mpc.define_nlp_multi()
+        rlmpc.define_nlp_multi()
         exp.solve_nmpc_multi()
     elif args.method == "finite-difference":
         # ["nlp_opts"]["ipopt"]["jacobian_approximation"] = "finite-difference-values"
-        rl_mpc.define_nlp()
+        rlmpc.define_nlp()
         exp.solve_nmpc()
 
     result_columns = eval_env.env_method("get_obs_names")[0][:23]

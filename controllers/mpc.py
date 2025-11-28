@@ -4,13 +4,8 @@ import casadi as ca
 import numpy as np
 
 
-# from model.aux_states import update
-# from model.ode import ODE
-from model.utils import define_model, co2dens2ppm, vaporPres2rh #, init_state, load_dummy_weather
-# from model.parameters import init_default_params
-# from model.utils import load_dummy_weather, init_state
-# from model.parameters import init_default_params
-
+from common.utils import define_model
+from environments.utils import co2dens2ppm, vaporPres2rh
 
 class MPC:
     solver: ca.Function

@@ -6,20 +6,75 @@ from typing import Dict, Any, Callable, List, Optional, Union, Tuple
 import wandb
 import numpy as np
 import pandas as pd
+import casadi as ca
 
 from torch.optim.adam import Adam
 from torch.nn.modules.activation import ReLU, SiLU, Tanh, ELU
 from wandb.integration.sb3 import WandbCallback
 from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize, VecMonitor, VecEnv
 
+from common.results import Results
 from common.callbacks import CustomWandbCallback, SaveVecNormalizeCallback, BaseCallback
 from environments.tomato_env import TomatoEnv
-
-from common.results import Results
+from model.ode import ODE
 
 ACTIVATION_FN = {"ReLU": ReLU, "SiLU": SiLU, "Tanh":Tanh, "ELU": ELU}
 OPTIMIZER = {"ADAM": Adam}
 ENVS = {"TomatoEnv": TomatoEnv}
+
+def define_model(nx: int, nu: int, nd: int, n_params: int, dt: float) -> ca.Function:
+    # Define the symbolic variables for CasADi
+    x = ca.SX.sym("x", nx)
+    u = ca.SX.sym("u", nu)
+    d = ca.SX.sym("d", nd)
+    p = ca.SX.sym("p", n_params)
+
+    dxdt = ODE(x, u, d, p)
+    input_args_sym = ca.vertcat(d, p)
+
+    int_opts = {"abstol": 1e-4, "reltol": 1e-4, "max_num_steps": 7e4}
+    # int_opts = {}
+    F = ca.integrator(
+        "F", "cvodes",
+        {"x": x, "u": u, "p": input_args_sym, "ode": dxdt},
+        0.0, dt, int_opts
+    )
+
+    return F
+
+def init_state(d0, rhMax, time_in_days):
+    """Initialize greenhouse state vector"""
+    state = np.zeros(28)
+    state[0] = d0[3]        # co2Air
+    state[1] = state[0]     # co2Top
+    state[2] = 18.5         # tAir
+    state[3] = state[2]     # tTop
+    state[4] = state[2] + 4 # tCan
+    state[5] = state[2]     # tCovIn
+    state[6] = state[2]     # tCovE
+    state[7] = state[2]     # tThScr
+    state[8] = state[2]     # tFlr
+    state[9] = state[2]     # tPipe
+    state[10] = state[2]    # tSoil1
+    state[11] = .25*(3.*state[2] + d0[6])   # tSoil2
+    state[12] = .25*(2.*state[2] + 2*d0[6]) # tSoil3
+    state[13] = .25*(state[2] + 3*d0[6])    # tSoil4
+    state[14] = d0[6]       # tSoil5
+    state[15] = rhMax / 100. * satVp(state[2])  # vpAir
+    state[16] = state[15]   # vpTop
+    state[17] = state[2]    # tLamp
+    state[18] = state[2]    # tIntLamp
+    state[19] = state[2]    # tGroPipe
+    state[20] = state[2]    # tBlScr
+    state[21] = state[4]    # tCan24
+    state[22] = 1000.       # cBuf
+    state[23] = 9.5283e4    # cLeaf
+    state[24] = 2.5107e5    # cStem
+    state[25] = 5.5338e4    # cFruit
+    state[26] = 3.0978e3    # tCanSum
+    state[27] = time_in_days # time
+    return state
+
 
 def load_env(env_id, model_name, env_base_params, env_specific_params, load_path):
     """    
@@ -99,12 +154,17 @@ def make_vec_env(
             env.norm_reward = False
     return env
 
-
-def load_rl_hyperparams(env_id: str, algorithm: str) -> Dict[str, Any]:
+def load_model_hyperparams(algorithm: str, env_id: str) -> Dict[str, Any]:
     with open(join("configs/agents/", algorithm + ".yml"), "r") as f:
         params = yaml.load(f, Loader=yaml.FullLoader)
     model_hyperparams = params[env_id]
     return model_hyperparams
+
+# def load_rl_hyperparams(env_id: str, algorithm: str) -> Dict[str, Any]:
+#     with open(join("configs/agents/", algorithm + ".yml"), "r") as f:
+#         params = yaml.load(f, Loader=yaml.FullLoader)
+#     model_hyperparams = params[env_id]
+#     return model_hyperparams
 
 def load_rl_env_params(env_id: str, path: str) -> Tuple[Dict, Dict, Dict]:
     '''
