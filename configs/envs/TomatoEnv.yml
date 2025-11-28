@@ -22,14 +22,14 @@ GreenLightEnv:
 
 TomatoEnv:
   reward_function: DummyReward    # reward function to use
- 
-  observation_modules: [          # observation modules to use
-    IndoorClimateObservations,   
+
+  observation_modules: [          # observation modules to use for the environment
+    IndoorClimateObservations,
     BasicCropObservations, 
     ControlObservations, 
     WeatherObservations,
     TimeObservations,
-    WeatherForecastObservations
+    # WeatherForecastObservations
   ]
 
   constraints:
