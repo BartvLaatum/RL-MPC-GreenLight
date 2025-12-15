@@ -2,14 +2,13 @@ import argparse
 import os
 from os.path import join
 from tqdm import tqdm
-import pandas as pd
 import numpy as np
 
 from stable_baselines3 import PPO, SAC
-from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv
+from stable_baselines3.common.vec_env import VecFrameStack
 
 from common.results import Results
-from common.utils import load_rl_env_params, load_rl_hyperparams, make_vec_env, load_env
+from common.utils import load_rl_env_params, load_env, load_model_hyperparams
 
 ALG = {"ppo": PPO, 
        "sac": SAC}
@@ -19,7 +18,7 @@ def evaluate(model, env):
     N = env.get_attr("N")[0]
     epi, penalty, revenue, heat_cost, co2_cost, elec_cost = np.zeros(N+1), np.zeros(N+1), np.zeros(N+1), np.zeros(N+1), np.zeros(N+1),np.zeros(N+1)
     temp_violation, co2_violation, rh_violation = np.zeros(N+1), np.zeros(N+1), np.zeros(N+1)
-    episodic_obs = np.zeros((N+1, 23))
+    episodic_obs = np.zeros((N+1, 20))
     episode_rewards = np.zeros(N+1)
     episode_rewards = np.zeros(N+1)
     dones = np.zeros((1,), dtype=bool)
@@ -28,6 +27,10 @@ def evaluate(model, env):
     observations = env.reset()
     timestep = 0
     states = None
+    frame_stack = False
+    if isinstance(env, VecFrameStack):
+        frame_stack = True
+        n_stack = env.stacked_obs.n_stack
 
     for timestep in range(N):
         actions, states = model.predict(
@@ -38,7 +41,13 @@ def evaluate(model, env):
     )
         observations, rewards, dones, infos = env.step(actions)
         episode_rewards[timestep] += rewards[0]
-        episodic_obs[timestep] += env.unnormalize_obs(observations)[0, :23]
+        # episodic_obs[timestep] += env.unnormalize_obs(observations)[0, :23]
+        if frame_stack:
+            frames = np.split(observations, n_stack, axis=1)
+            episodic_obs[timestep] += env.unnormalize_obs(frames[-1])[0, :20]
+        else:
+            episodic_obs[timestep] += env.unnormalize_obs(observations)[0, :20]
+
         epi[timestep] += infos[0]["EPI"]
         penalty[timestep] += infos[0]["penalty"]
         revenue[timestep] += infos[0]["revenue"]
@@ -61,6 +70,8 @@ if __name__ == "__main__":
     parser.add_argument("--algorithm", type=str, default="ppo", help="Name of the algorithm (ppo or sac)")
     parser.add_argument("--uncertainty_scale", type=float, help="Uncertainty scale", required=True)
     parser.add_argument("--mode", type=str, choices=['deterministic', 'stochastic'], required=True)
+    parser.add_argument("--frame_stack", action="store_true", help="Whether to use frame stacking")
+    parser.add_argument("--n_stack", type=int, default=1, help="Number of frames to stack")
     args = parser.parse_args()
 
     assert not (args.mode == "deterministic" and args.uncertainty_scale != 0.0), \
@@ -78,13 +89,16 @@ if __name__ == "__main__":
 
     # load in the environment and model
     env_base_params, env_specific_params = load_rl_env_params(args.env_id, env_config_path)
-    model_params = load_rl_hyperparams(args.env_id, args.algorithm)
-    env_specific_params["uncertainty_scale"] = args.uncertainty_scale
-    eval_env = load_env(args.env_id, args.model_name, env_base_params, env_specific_params, load_path)
+    # env_base_params["training"] = False
+    env_specific_params["eval_options"]["eval_days"] = [0]
+    model_params = load_model_hyperparams(args.algorithm, args.env_id)
+    # env_specific_params["uncertainty_scale"] = args.uncertainty_scale
+    eval_env = load_env(args.env_id, args.model_name, env_base_params, env_specific_params, load_path, args.frame_stack, args.n_stack)
 
     model = ALG[args.algorithm].load(join(load_path + f"models", f"{args.model_name}/best_model.zip"), device="cpu")
 
-    result_columns = eval_env.env_method("get_obs_names")[0][:23]
+    result_columns = eval_env.env_method("get_obs_names")[0][:20]
+    print(result_columns)
     result_columns.extend(["Rewards",  "EPI", "Penalty", "Revenue", "Heat costs", "CO2 costs", "Elec costs"])
     result_columns.extend(["temp_violation", "co2_violation", "rh_violation"])
     result_columns.extend(["episode"])
@@ -102,7 +116,8 @@ if __name__ == "__main__":
     start_day = eval_env.get_attr("start_day")[0]
     growth_year = eval_env.get_attr("growth_year")[0]
     location = eval_env.get_attr("location")[0]
+    month = "june"
 
-    save_name = f"{args.model_name}.csv"
+    save_name = f"{args.model_name}-{month}-{start_day+1}.csv"
     print("saving results to", save_name)
     result.save(f"{save_dir}/{save_name}")

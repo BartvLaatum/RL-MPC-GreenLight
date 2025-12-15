@@ -9,7 +9,7 @@ from controllers.mpc import MPC
 
 from stable_baselines3 import PPO, SAC
 from stable_baselines3.common.base_class import BaseAlgorithm
-from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
+from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize, VecFrameStack
 
 from environments.tomato_env import TomatoEnv
 from environments.utils import co2ppm2dens, rh2vaporDens, define_model 
@@ -40,7 +40,7 @@ class RLMPC(MPC):
         # penalize deviations in first 3 climate states and fruit biomass
         # self.terminal_penalty_weights = np.zeros(shape=(3,))
         self.terminal_penalty_weights = np.zeros(shape=(self.nx,))
-        self.terminal_penalty_weights[:] = 1e-5
+        self.terminal_penalty_weights[...] = 1e-5
 
         # defining model dynamics
         self.F = define_model(self.nx, self.nu, self.nd, self.n_params, self.dt)
@@ -72,18 +72,47 @@ class RLMPC(MPC):
         cumulative_reward = 0
         rewards_log = []
 
-        obs = self.eval_env.env_method("_get_obs")[0]  # Get the initial observation from the environment
-        obs_log.append(obs)
-        x_log.append(self.eval_env.env_method("get_state")[0])
-        obs = self.eval_env.normalize_obs(obs).reshape(1, -1)  # Normalize the observation
+        # if using frame stacking we need to handle observation synchronization
+        if isinstance(self.eval_env, VecFrameStack):
+            n_stack = self.eval_env.stacked_obs.n_stack
+            # Get raw observation for logging (current frame, unnormalized)
+            raw_obs = self.eval_env.env_method("_get_obs")[0]
+            obs_log.append(raw_obs)
+            x_log.append(self.eval_env.env_method("get_state")[0])
+                        
+            # Sync the frame stack buffer with current environment state.
+            # This is necessary because set_env_state() may have been called,
+            # which changes the underlying env but not the VecFrameStack buffer.
+            # Get the current normalized observation from the inner VecNormalize
+            current_obs = self.eval_env.venv.normalize_obs(raw_obs).reshape(1, -1)
+            # Update the stacked observations buffer with the current observation.
+            # This shifts previous observations and adds the new one, preserving history.
+            dones = np.array([False])  # Not a terminal state
+            infos = [{}]  # Empty info dict
+            if self.eval_env.get_attr("timestep")[0] == 0:
+                self.eval_env.stacked_obs.reset(current_obs)
+            else:
+                self.eval_env.stacked_obs.update(current_obs, dones, infos)
+
+            # Get stacked observation for prediction (already normalized by inner VecNormalize)
+            obs = self.eval_env.stacked_obs.stacked_obs.copy()
+        else:
+            n_stack = 1
+            obs = self.eval_env.env_method("_get_obs")[0]
+            obs_log.append(obs)
+            x_log.append(self.eval_env.env_method("get_state")[0])
+            obs = self.eval_env.normalize_obs(obs).reshape(1, -1)  # Normalize the observation
 
         states = None # States for the model, can be used for recurrent models
         episode_starts = np.ones((1,), dtype=bool) # Not used in this context, can be used for recurrent models
         terminated = False
 
-        # Freeze environment 
+        # Freeze environment (save state for restoration after rollout)
         if freeze:
-            self.eval_env.env_method("freeze") # freeze variables
+            self.eval_env.env_method("freeze")  # freeze environment variables
+            # Also save the stacked observations buffer for VecFrameStack
+            if isinstance(self.eval_env, VecFrameStack):
+                frozen_stacked_obs = self.eval_env.stacked_obs.stacked_obs.copy()
         for i in range(0, horizon):
             action, states = self.model.predict(
                 obs,
@@ -96,14 +125,22 @@ class RLMPC(MPC):
 
             cumulative_reward += rewards
             rewards_log.append(rewards)
-            
+
             obs_norm_log.append(obs[0])
-            obs_log.append(self.eval_env.unnormalize_obs(obs[0]).ravel())
+            # For stacked observations, extract the last frame before unnormalizing
+            if n_stack > 1:
+                frames = np.split(obs, n_stack, axis=1)
+                obs_log.append(self.eval_env.unnormalize_obs(frames[-1]).ravel())
+            else:
+                obs_log.append(self.eval_env.unnormalize_obs(obs[0]).ravel())
             x_log.append(x)
             u_log.append(infos[0]["controls"])
-        # Unfreeze environment
+        # Unfreeze environment (restore state after rollout)
         if freeze:
             self.eval_env.env_method("unfreeze")
+            # Also restore the stacked observations buffer for VecFrameStack
+            if isinstance(self.eval_env, VecFrameStack):
+                self.eval_env.stacked_obs.stacked_obs[:] = frozen_stacked_obs
 
         # Store data
         log["obs"] = np.vstack(obs_log).transpose()
@@ -295,9 +332,9 @@ class RLMPC(MPC):
             self.lbg.extend([-float('inf')]*X_terminal.size1())
             self.ubg.extend([0.0]*X_terminal.size1())
 
-            if self.terminal_penalty:
-                terminal_penalty = ca.dot(self.terminal_penalty_weights, ca.fabs(X[:, -1] - X_terminal))
-                J += terminal_penalty
+        if self.terminal_penalty:
+            terminal_penalty = ca.dot(self.terminal_penalty_weights, ca.fabs(X[:, -1] - X_terminal))
+            J += terminal_penalty
 
         # Loop over prediction horizon
         for k in range(self.Np):

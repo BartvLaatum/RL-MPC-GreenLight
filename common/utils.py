@@ -21,7 +21,7 @@ OPTIMIZER = {"ADAM": Adam}
 ENVS = {"TomatoEnv": TomatoEnv}
 
 
-def load_env(env_id, model_name, env_base_params, env_specific_params, load_path):
+def load_env(env_id, model_name, env_base_params, env_specific_params, load_path, frame_stack=False, n_stack=1):
     """    
     Loads and configures a vectorized and normalized environment for evaluation.
 
@@ -45,11 +45,14 @@ def load_env(env_id, model_name, env_base_params, env_specific_params, load_path
         n_envs=1, 
         monitor_filename=None, 
         vec_norm_kwargs=None,
-        eval_env=True
+        eval_env=True,
+        frame_stack=False,
     )
     env = VecNormalize.load(join(load_path, "envs", f"{model_name}/best_vecnormalize.pkl"), env)
     env.training = False
     env.norm_reward = False
+    if frame_stack:
+        env = VecFrameStack(env, n_stack)
     return env
 
 

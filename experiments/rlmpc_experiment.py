@@ -16,9 +16,7 @@ ALGS = {
 def main(args: argparse.Namespace):
     load_path = os.path.join("train_data", args.project, args.algorithm, "deterministic")
     save_dir = os.path.join("results", args.project, "deterministic", "rlmpc", args.experiment_name)
-
     rl_model_path = os.path.join(load_path, "models", args.model_name, "best_model.zip")
-    # vf_path = f"{load_path}/models/{args.model_name}/vf.zip"
 
     # load in the environment parameters
     base_env_params, specific_env_params = load_rl_env_params(args.env_id, "configs/envs/")
@@ -29,9 +27,17 @@ def main(args: argparse.Namespace):
 
     # load the hyperparameter for MPC and RL
     mpc_params = load_model_hyperparams("mpc", args.env_id)
-    # hyperparameters = load_model_hyperparams(args.algorithm, args.env_id)
 
-    eval_env = load_env(args.env_id, args.model_name, base_env_params, specific_env_params, load_path)
+    eval_env = load_env(
+        args.env_id,
+        args.model_name,
+        base_env_params,
+        specific_env_params,
+        load_path,
+        args.frame_stack,
+        args.n_stack
+    )
+
     eval_env.reset()
     model = ALGS[args.algorithm].load(rl_model_path, env=eval_env, device="cpu")
 
@@ -41,7 +47,7 @@ def main(args: argparse.Namespace):
     ns = 6
     nd = 10
     dt = 300.
-    n_days = 0.1
+    n_days = 1
     month = "june"
     Np = int(args.horizon * 3600 / dt)  # Convert hours to steps
 
@@ -76,7 +82,7 @@ def main(args: argparse.Namespace):
     rlmpc.define_nlp_multi()
     exp.solve_nmpc_multi()
 
-    result_columns = eval_env.env_method("get_obs_names")[0][:23]
+    result_columns = eval_env.env_method("get_obs_names")[0][:20]
     result_columns.extend(["Rewards",  "EPI", "Penalty"])
     # result_columns.extend(["temp_violation", "co2_violation", "rh_violation"])
     # result_columns.extend(["episode"])
@@ -101,6 +107,8 @@ if __name__ == "__main__":
     parser.add_argument("--terminal_penalty", action=argparse.BooleanOptionalAction, help="Enable terminal constraint in MPC")
     parser.add_argument("--extend_ocp_region", action=argparse.BooleanOptionalAction, help="Extend OCP region")
     parser.add_argument("--linear_solver", type=str, default="ma57", help="Linear solver to use")
+    parser.add_argument("--frame_stack", action="store_true", help="Whether to use frame stacking")
+    parser.add_argument("--n_stack", type=int, default=1, help="Number of frames to stack")
     args = parser.parse_args()
 
     main(args)
