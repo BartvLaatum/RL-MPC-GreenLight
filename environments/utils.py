@@ -36,13 +36,12 @@ def load_dummy_weather(season_length: int, start_day: int, dt: float, pred_horiz
     return weather_data
 
 def load_weather_data(
-        weatherDataDir: str,
+        weather_data_dir: str,
         location: str,
-        source: str,
-        growthYear: int,
-        startDay: int,
-        nDays: int,
-        predHorizon: int,
+        growth_year: int,
+        start_day: int,
+        n_days: int,
+        pred_horizon: int,
         h: float,
         nd: int
     ) -> np.ndarray:
@@ -73,7 +72,7 @@ def load_weather_data(
         d[8]: isDay         Whether it is day or night [0,1]
         d[9]: isDaySmooth   Whether it is day or night [0,1] with a smooth transition
     """
-    weatherDataPath = join(join(weatherDataDir, location), source + str(growthYear)) + ".csv"
+    weatherDataPath = join(weather_data_dir, location, str(growth_year)) + ".csv"
 
     c = 86400      # seconds in a day
     CO2_PPM = 400  # assumed constant outdoor co2 concentration [ppm]
@@ -81,13 +80,13 @@ def load_weather_data(
 
     time = rawWeather["time"].values    # time since start of the year in [s]
     dt = np.mean(np.diff(time-time[0])) # sample period of data [s]
-    N0 = int(np.ceil(startDay*c/dt))    # Start index
-    Ns = int(np.ceil(nDays*c/dt))       # Number of samples we need from regular data
-    Np = int(np.ceil(predHorizon*c/dt))+1 # Number of samples into the future we need from regular data
+    N0 = int(np.ceil(start_day*c/dt))    # Start index
+    Ns = int(np.ceil(n_days*c/dt))       # Number of samples we need from regular data
+    Np = int(np.ceil(pred_horizon*c/dt))+1 # Number of samples into the future we need from regular data
 
     # check whether we exceed data length and we are in the final season
     if N0+Ns+Np > len(time):
-        rawWeather = expandWeatherData(weatherDataDir, rawWeather, location, source, growthYear, time, dt)
+        rawWeather = expandWeatherData(weather_data_dir, rawWeather, location, growth_year, time, dt)
     weatherData = np.zeros((Ns+Np, nd))                                         # preallocate weather data matrix
     time = rawWeather["time"].values[N0:N0+Ns+Np]                               # time since start of the year in [s]
     weatherData[:, 0] = rawWeather["global radiation"][N0:N0+Ns+Np]             # iGlob
@@ -115,11 +114,10 @@ def load_weather_data(
     return weatherDataResampled
 
 def expandWeatherData(
-                    weatherDataDir: str, 
+                    weather_data_dir: str, 
                     rawWeather: pd.DataFrame,
                     location: str,
-                    source: str,
-                    growthYear: int,
+                    growth_year: int,
                     time: ArrayLike,
                     dt: SupportsFloat,
                     ) -> pd.DataFrame:
@@ -130,14 +128,13 @@ def expandWeatherData(
         weatherDataDir  - path to raw weather data
         rawWeather      - current weather data
         location        - location of the greenhouse
-        source          - source of the weather data (e.g. KNMI)
         growthYear      - year of the growth season
         time            - time since start of the year in [s]
         dt              - sample period of weather data [s]
     Returns:
         rawWeather      - weather data for the next year appended to the current weather data
     """
-    weatherDataPath = join(join(weatherDataDir, location), source + str(growthYear+1)) + ".csv"
+    weatherDataPath = join(weather_data_dir, location, str(growth_year+1)) + ".csv"
     newRawWeather = pd.read_csv(weatherDataPath, sep=",")
     newRawWeather["time"] += time[-1] + dt
     rawWeather = pd.concat([rawWeather, newRawWeather.iloc[:, :]])
@@ -507,27 +504,3 @@ def init_state(d0, rhMax, time_in_days):
     state[26] = 3.0978e3    # tCanSum
     state[27] = time_in_days # time
     return state
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--month", required=True, type=str)
-    parser.add_argument("--dt", required=True, type=float)
-    
-    args = parser.parse_args()
-    months = {
-        "january": 0,
-        "june": 151,
-    }
-    weather = load_weather_data(
-        weatherDataDir="weather/", 
-        location="",
-        source="KASPRO",
-        growthYear=2023,
-        startDay=months[args.month],
-        n_days=31,
-        predHorizon=1,
-        h=args.dt,
-        nd=10
-    )
-    np.savetxt(f"weather/{args.month}/weather-{int(args.dt)}dt.csv", weather, delimiter=",")
