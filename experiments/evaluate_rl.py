@@ -8,7 +8,7 @@ from stable_baselines3 import PPO, SAC
 from stable_baselines3.common.vec_env import VecFrameStack
 
 from common.results import Results
-from common.utils import load_rl_env_params, load_env, load_model_hyperparams
+from common.utils import load_env_params, load_env, load_model_hyperparams
 
 ALG = {"ppo": PPO, 
        "sac": SAC}
@@ -88,9 +88,7 @@ if __name__ == "__main__":
     os.makedirs(save_dir, exist_ok=True)
 
     # load in the environment and model
-    env_base_params, env_specific_params = load_rl_env_params(args.env_id, env_config_path)
-    # env_base_params["training"] = False
-    env_specific_params["eval_options"]["eval_days"] = [0]
+    env_base_params, env_specific_params = load_env_params(args.env_id, env_config_path)
     model_params = load_model_hyperparams(args.algorithm, args.env_id)
     # env_specific_params["uncertainty_scale"] = args.uncertainty_scale
     eval_env = load_env(args.env_id, args.model_name, env_base_params, env_specific_params, load_path, args.frame_stack, args.n_stack)
@@ -116,8 +114,7 @@ if __name__ == "__main__":
     start_day = eval_env.get_attr("start_day")[0]
     growth_year = eval_env.get_attr("growth_year")[0]
     location = eval_env.get_attr("location")[0]
-    month = "june"
 
-    save_name = f"{args.model_name}-{month}-{start_day+1}.csv"
+    save_name = f"{args.model_name}-{location}-{growth_year}-{start_day}.csv"
     print("saving results to", save_name)
     result.save(f"{save_dir}/{save_name}")
