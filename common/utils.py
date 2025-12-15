@@ -107,12 +107,12 @@ def make_vec_env(
     return env
 
 def load_model_hyperparams(algorithm: str, env_id: str) -> Dict[str, Any]:
-    with open(join("configs/agents/", algorithm + ".yml"), "r") as f:
+    with open(join("configs/controllers/", algorithm + ".yml"), "r") as f:
         params = yaml.load(f, Loader=yaml.FullLoader)
     model_hyperparams = params[env_id]
     return model_hyperparams
 
-def load_rl_env_params(env_id: str, path: str) -> Tuple[Dict, Dict, Dict]:
+def load_env_params(env_id: str, path: str) -> Tuple[Dict, Dict, Dict]:
     '''
     Function that loads in the environment variables. 
     Returns the variables for the general parent GreenLightEnv class,
@@ -131,20 +131,6 @@ def load_rl_env_params(env_id: str, path: str) -> Tuple[Dict, Dict, Dict]:
     env_base_params = params["GreenLightEnv"]
 
     return env_base_params, env_specific_params
-
-def load_mpc_params(env_id: str) -> Dict[str, Any]:
-    """
-    Load MPC parameters from a yaml file.
-    Arguments:
-        file_name (str): Name of the MAT file containing the MPC parameters.
-    Returns:
-        Dict[str, Any]: Dictionary of MPC parameters.
-    """    
-    # load mpc parameters
-    with open("configs/agents/mpc.yml", "r") as file:
-        mpc_params = yaml.safe_load(file)
-
-    return mpc_params[env_id]
 
 def load_sweep_config(path: str, env_id: str, algorithm: str) -> Dict[str, Any]:
     with open(join(path, algorithm + ".yml"), "r") as f:
