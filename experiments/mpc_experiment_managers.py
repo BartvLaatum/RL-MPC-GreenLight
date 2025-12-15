@@ -7,8 +7,7 @@ import numpy as np
 import casadi as ca
 
 from controllers.mpc import MPC
-from common.utils import load_model_hyperparams
-from environments.utils import load_dummy_weather, convert_rh_ppm, init_state
+from environments.utils import load_weather_data, load_dummy_weather, init_state
 from model.parameters import init_default_params
 
 # from visualizations.trajectories import plot_control_trajectories, plot_states
@@ -19,17 +18,22 @@ class MPCExperimentManager:
     def __init__(
             self,
             mpc: MPC,
-            month: str,
             n_days: int,
+            location: str,
+            growth_year: int,
+            start_day: int,
         ):
 
         self.mpc = mpc
-        self.month = month
         self.L = n_days*86400
         self.t = np.arange(0, self.L, mpc.dt)
         self.N = len(self.t)
         self.exec_time = np.zeros((self.N, 1))
         self.hour_conversion = 3600/mpc.dt
+        self.location = location
+        self.growth_year = growth_year
+        self.start_day = start_day
+        self.pred_horizon = mpc.horizon/24
 
         self.EPI = np.zeros((self.N, 1))
         self.penalties = np.zeros((self.N, 1))
@@ -37,12 +41,21 @@ class MPCExperimentManager:
         self.solver_failure = np.zeros((self.N, 1)) 
 
         # Load or define your disturbance trajectory
-        self.d_values = load_dummy_weather(
-            season_length=n_days,
-            start_day=0,
-            dt=mpc.dt,
-            pred_horizon=mpc.Np,
-            month=month
+        # self.d_values = load_dummy_weather(
+        #     season_length=n_days,
+        #     start_day=0,
+        #     dt=mpc.dt,
+        #     pred_horizon=mpc.Np,
+        # )
+        self.d_values = load_weather_data(
+            weather_data_dir=f"weather/",
+            location=self.location,
+            growth_year=self.growth_year,
+            start_day=self.start_day,
+            n_days=n_days,
+            pred_horizon=self.pred_horizon,
+            h=mpc.dt,
+            nd=10
         )
 
         self.x0 = init_state(self.d_values[0], 85.0, 0.0)
@@ -53,38 +66,6 @@ class MPCExperimentManager:
         self.U[:, 0] = np.ones(mpc.nu)*0.5
         # Initial state
         self.p = init_default_params(mpc.n_params)
-
-    def get_init(self, ll, U_init=None):
-        # Retrieve dimensions
-        nx = self.mpc.nx
-        nu = self.mpc.nu
-        Np = self.mpc.Np
-        # Initial guess for control inputs
-        if U_init is None:
-            U_init = 0.5 * np.ones((nu, Np))
-
-        # Build an initial guess for the state trajectory by propagating X0.
-        X_init = np.zeros((nx, Np+1))
-        # Set the initial state from the current state at time ll.
-        X_init[:, 0] = self.X[:, ll]  # assuming self.X[:, ll] is a numpy array
-
-        # Propagate the dynamics using the initial guess for controls.
-        for k in range(Np):
-            # Use the k-th control guess
-            u_k = U_init[:, k]
-            # Use the k-th disturbance from d_values (ensure proper shape)
-            D_k = self.d_values[ll + k, :]  
-            # Build the parameter vector for F as: [D_k; self.p]
-            p_dyn = ca.vertcat(ca.DM(D_k), self.p)
-            # Propagate the state: note that F returns a dictionary with key "xf"
-            res = self.mpc.F(x0=ca.DM(X_init[:, k]), u=ca.DM(u_k), p=p_dyn)
-            # Extract the next state; convert to a 1D NumPy array.
-            X_next = res["xf"].full().flatten()
-            X_init[:, k+1] = X_next
-
-        # Now, form the overall decision vector initial guess by concatenating X_init and U_init.
-        w_init = np.concatenate([X_init.T.flatten(), U_init.T.flatten()])
-        return w_init
 
     def get_x_init(self, ll, U_init=None):
         # Retrieve dimensions
@@ -188,10 +169,10 @@ class MPCExperimentManager:
 
             # Compute closed-loop performance
             self.EPI[ll, :] = \
-                (self.X[25, ll+1]-self.X[25, ll])* 1e-6 / 0.06 * 1.2 - \
-                (0.09 * self.p[108]/self.p[46] * 1e-3 * us_opt[:, 0][0]/self.hour_conversion + \
-                0.2 * self.p[172] * 1e-3 * us_opt[:, 0][4]/self.hour_conversion + \
-                0.3 * us_opt[:, 0][1]* self.p[109]/self.p[46] * 1e-6 * self.mpc.dt)
+                (self.X[25, ll+1]-self.X[25, ll])* 1e-6 / self.mpc.reward_params["dmfm"] * self.mpc.reward_params["fruit_price"] - \
+                (self.mpc.reward_params["heating_price"] * self.p[108]/self.p[46] * 1e-3 * us_opt[:, 0][0]/self.hour_conversion + \
+                self.mpc.reward_params["elec_price"] * self.p[172] * 1e-3 * us_opt[:, 0][4]/self.hour_conversion + \
+                self.mpc.reward_params["co2_price"] * us_opt[:, 0][1]* self.p[109]/self.p[46] * 1e-6 * self.mpc.dt)
             self.penalties[ll, :] = self.mpc.compute_penalties(self.X[:,ll+1])
 
             self.rewards[ll, :] = self.EPI[ll, :] - self.penalties[ll, :]
@@ -230,8 +211,6 @@ class MPCExperimentManager:
         u_init = np.ones((self.mpc.nu, self.mpc.Np))*0.5
 
         x_init = self.get_x_init(0, u_init)
-
-        # x_init = np.zeros((self.mpc.nx, self.mpc.Np+1))
 
         s_init = np.zeros((self.mpc.ns, self.mpc.Np))
         s_init.T.flatten()
@@ -277,10 +256,10 @@ class MPCExperimentManager:
             # costs
             self.EPI[ll, :] = \
                 (
-                    self.X[25, ll+1]-self.X[25, ll])* 1e-6 / 0.06 * 1.2 - \
-                    (0.09 * self.p[108]/self.p[46] * 1e-3 * us_opt[:, 0][0]/self.hour_conversion + \
-                    0.2 * self.p[172] * 1e-3 * us_opt[:, 0][4]/self.hour_conversion + \
-                    0.3 * us_opt[:, 0][1]* self.p[109]/self.p[46] * 1e-6 * self.mpc.dt
+                    self.X[25, ll+1]-self.X[25, ll])* 1e-6 / self.mpc.reward_params["dmfm"] * self.mpc.reward_params["fruit_price"] - \
+                    (self.mpc.reward_params["heating_price"] * self.p[108]/self.p[46] * 1e-3 * us_opt[:, 0][0]/self.hour_conversion + \
+                    self.mpc.reward_params["elec_price"] * self.p[172] * 1e-3 * us_opt[:, 0][4]/self.hour_conversion + \
+                    self.mpc.reward_params["co2_price"] * us_opt[:, 0][1]* self.p[109]/self.p[46] * 1e-6 * self.mpc.dt
                 )
             self.penalties[ll, :] = self.mpc.compute_penalties(self.X[:,ll+1])
 
@@ -288,29 +267,37 @@ class MPCExperimentManager:
 
         print(f"Average solver time per iteration: {np.mean(self.exec_time)} (s)")
 
-    def save_data(self, save_dir, horizon):
+    def save_data(self, save_dir):
         """Save the data to a file."""
         os.makedirs(save_dir, exist_ok=True)
-        np.savetxt(f"{save_dir}/control-inputs-cs-{int(self.mpc.dt)}dt-{horizon}H.csv", self.U.T, delimiter=",")
-        np.savetxt(f"{save_dir}/solver-failure-cs-{int(self.mpc.dt)}dt-{horizon}H.csv", self.solver_failure, delimiter=",")
-        np.savetxt(f"{save_dir}/states-cs-{int(self.mpc.dt)}dt-{horizon}H.csv", self.X.T, delimiter=",")
-        np.savetxt(f"{save_dir}/times-cs-{int(self.mpc.dt)}dt-{horizon}H.csv", self.exec_time, delimiter=",")
-        np.savetxt(f"{save_dir}/EPI-cs-{int(self.mpc.dt)}dt-{horizon}H.csv", self.EPI, delimiter=",")
-        np.savetxt(f"{save_dir}/penalties-cs-{int(self.mpc.dt)}dt-{horizon}H.csv", self.penalties, delimiter=",")
-        np.savetxt(f"{save_dir}/rewards-cs-{int(self.mpc.dt)}dt-{horizon}H.csv", self.rewards, delimiter=",")
+        np.savetxt(f"{save_dir}/control-inputs-{int(self.mpc.dt)}dt-{self.mpc.horizon}H-{self.location}-{self.growth_year}-{self.start_day}.csv", self.U.T, delimiter=",")
+        np.savetxt(f"{save_dir}/solver-failure-{int(self.mpc.dt)}dt-{self.mpc.horizon}H-{self.location}-{self.growth_year}-{self.start_day}.csv", self.solver_failure, delimiter=",")
+        np.savetxt(f"{save_dir}/states-{int(self.mpc.dt)}dt-{self.mpc.horizon}H-{self.location}-{self.growth_year}-{self.start_day}.csv", self.X.T, delimiter=",")
+        np.savetxt(f"{save_dir}/times-{int(self.mpc.dt)}dt-{self.mpc.horizon}H-{self.location}-{self.growth_year}-{self.start_day}.csv", self.exec_time, delimiter=",")
+        np.savetxt(f"{save_dir}/EPI-{int(self.mpc.dt)}dt-{self.mpc.horizon}H-{self.location}-{self.growth_year}-{self.start_day}.csv", self.EPI, delimiter=",")
+        np.savetxt(f"{save_dir}/penalties-{int(self.mpc.dt)}dt-{self.mpc.horizon}H-{self.location}-{self.growth_year}-{self.start_day}.csv", self.penalties, delimiter=",")
+        np.savetxt(f"{save_dir}/rewards-{int(self.mpc.dt)}dt-{self.mpc.horizon}H-{self.location}-{self.growth_year}-{self.start_day}.csv", self.rewards, delimiter=",")
 
 class RLMPCExperimentManager(MPCExperimentManager):
     def __init__(
         self,
         rl_mpc: MPC,
-        month: str,
         n_days: int,
+        location: str,
+        growth_year: int,
+        start_day: int,
         offline_rl: bool = False,
         extend_ocp_region: bool = True,
-    ):
+    ) -> None:
+        super().__init__(
+            rl_mpc,
+            n_days,
+            location,
+            growth_year,
+            start_day,
+        )
         self.offline_rl = offline_rl
         self.extend_ocp_region = extend_ocp_region
-        super().__init__(rl_mpc, month, n_days)
 
     def solve_nmpc_multi(self):
         """
