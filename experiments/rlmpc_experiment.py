@@ -5,7 +5,7 @@ from stable_baselines3 import PPO
 
 from controllers.rlmpc import RLMPC
 from experiments.mpc_experiment_managers import RLMPCExperimentManager
-from common.utils import load_model_hyperparams, load_rl_env_params, load_env
+from common.utils import load_model_hyperparams, load_env_params, load_env
 from common.results import Results
 from environments.utils import convert_rh_ppm
 
@@ -19,7 +19,7 @@ def main(args: argparse.Namespace):
     rl_model_path = os.path.join(load_path, "models", args.model_name, "best_model.zip")
 
     # load in the environment parameters
-    base_env_params, specific_env_params = load_rl_env_params(args.env_id, "configs/envs/")
+    base_env_params, specific_env_params = load_env_params(args.env_id, "configs/envs/")
     # set the environment to test
     base_env_params["training"] = False
     # add prediction horizon to the season length to prevent env from resetting
@@ -41,40 +41,39 @@ def main(args: argparse.Namespace):
     eval_env.reset()
     model = ALGS[args.algorithm].load(rl_model_path, env=eval_env, device="cpu")
 
-    n_params = 208
-    nx = 28
-    nu = 6
-    ns = 6
-    nd = 10
-    dt = 300.
     n_days = 1
     month = "june"
-    Np = int(args.horizon * 3600 / dt)  # Convert hours to steps
 
     print(f"Running RL-MPC method...")
-    print(f"Using {args.linear_solver} linear solver")
-    mpc_params["nlp_opts"]["ipopt"]["linear_solver"] = args.linear_solver
 
     rlmpc = RLMPC(
-        nx,
-        nu,
-        ns,
-        n_params,
-        nd,
-        dt,
-        Np,
-        args.region_range,
-        mpc_params["nlp_opts"],
-        args.terminal_constraint,
-        eval_env,
-        model,
-        args.terminal_penalty,
+        nx=base_env_params["nx"],
+        nu=base_env_params["nu"],
+        ns=mpc_params["ns"],
+        n_params=base_env_params["num_params"],
+        nd=base_env_params["nd"],
+        dt=base_env_params["dt"],
+        horizon=args.horizon,
+        u_min=base_env_params["u_min"],
+        u_max=base_env_params["u_max"],
+        delta_u_max=base_env_params["delta_u_max"],
+        constraints=specific_env_params["constraints"],
+        reward_params=specific_env_params["reward_params"],
+        region_range=args.region_range,
+        nlp_opts=mpc_params["nlp_opts"],
+        terminal_constraint=args.terminal_constraint,
+        eval_env=eval_env,
+        model=model,
+        terminal_penalty=args.terminal_penalty,
     )
 
     exp = RLMPCExperimentManager(
-        rlmpc, 
-        month,
-        n_days,
+        rlmpc,
+        # n_days=base_env_params["season_length"],
+        n_days=1/12,
+        location=base_env_params["location"],
+        growth_year=base_env_params["start_train_year"],
+        start_day=base_env_params["start_train_day"],
         offline_rl=args.offline_rl,
         extend_ocp_region=args.extend_ocp_region
     )
@@ -89,14 +88,13 @@ def main(args: argparse.Namespace):
     result = Results(result_columns)
 
     exp.X = convert_rh_ppm(exp.X)
-    exp.save_data(save_dir, args.horizon)
+    exp.save_data(save_dir)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--project", type=str, default="GL-MPC-RL")
     parser.add_argument("--env_id", type=str, default="TomatoEnv")
     parser.add_argument("--save_name", type=str)
-    parser.add_argument("--weather_filename", default="weather-300dt.csv", type=str)
     parser.add_argument("--algorithm", type=str, default="ppo")
     parser.add_argument("--model_name", type=str, default="graceful-planet-22")
     parser.add_argument("--horizon", type=int, default=1, help="Prediction horizon in hours")
@@ -106,7 +104,6 @@ if __name__ == "__main__":
     parser.add_argument("--terminal_constraint", action=argparse.BooleanOptionalAction, help="Enable terminal constraint in MPC")
     parser.add_argument("--terminal_penalty", action=argparse.BooleanOptionalAction, help="Enable terminal constraint in MPC")
     parser.add_argument("--extend_ocp_region", action=argparse.BooleanOptionalAction, help="Extend OCP region")
-    parser.add_argument("--linear_solver", type=str, default="ma57", help="Linear solver to use")
     parser.add_argument("--frame_stack", action="store_true", help="Whether to use frame stacking")
     parser.add_argument("--n_stack", type=int, default=1, help="Number of frames to stack")
     args = parser.parse_args()
