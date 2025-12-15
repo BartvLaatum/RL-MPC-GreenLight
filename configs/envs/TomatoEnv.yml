@@ -1,9 +1,8 @@
 # Description: Configuration file for the Bleiswijk environment
 # Always define the general parameters for the base environment
 GreenLightEnv:
-  weather_data_dir: gl_gym/environments/weather # path to weather data
-  location: Amsterdam             # location of the recorded weather data
-  data_source: KNMI               # source of the weather data
+  weather_data_dir: weather/ # path to weather data
+  location: Netherlands             # location of the recorded weather data
   num_params: 208                 # number of model parameters
   nx: 28                          # number of states
   nu: 6                           # number of control inputs
@@ -14,10 +13,10 @@ GreenLightEnv:
   delta_u_max: 0.1                # max change rate in control inputs
   pred_horizon: 0.5               # [days] number of future weather predictions
   season_length: 1                # number of days to simulate
-  start_train_year: 2010          # start year for training
-  end_train_year: 2010            # end year for training
-  start_train_day: 59             # start day of the year for training
-  end_train_day: 59               # end day of the year for training  
+  start_train_year: 2023          # start year for training
+  end_train_year: 2023            # end year for training
+  start_train_day: 151             # start day of the year for training
+  end_train_day: 151               # end day of the year for training  
   training: True                  # whether we are training or testing
 
 TomatoEnv:
@@ -41,9 +40,9 @@ TomatoEnv:
     rh_max: 90.           # upper bound on relative humidity              [#]         70
 
   eval_options:
-    eval_days: [59]                    # days to evaluate the agent on
-    eval_years: [2010]                  # year to evaluate the agent on
-    location: Amsterdam                 # location of the greenhouse
+    eval_days: [151]                    # days to evaluate the agent on
+    eval_years: [2023]                  # year to evaluate the agent on
+    location: Netherlands                 # location of the greenhouse
     data_source: KNMI                 # source of the weather data
 
   reward_params:
