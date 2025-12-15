@@ -16,7 +16,12 @@ class MPC:
         n_params: int,
         nd: int,
         dt: float,
-        Np: int,
+        horizon: int,
+        u_min: List[float],
+        u_max: List[float],
+        delta_u_max: float,
+        constraints: Dict[str, Any],
+        reward_params: Dict[str, Any],
         nlp_opts: Dict[str, Any],
     ):
         self.nx = nx
@@ -24,24 +29,27 @@ class MPC:
         self.ns = ns
         self.n_params = n_params
         self.nd = nd
-        self.Np = Np
+        self.horizon = horizon
+        self.Np = int(horizon * 3600 / dt)
         self.dt = dt
+        self.u_min = u_min
+        self.u_max = u_max
+        self.delta_u_max = delta_u_max
+        self.reward_params = reward_params
         self.nlp_opts = nlp_opts
-
         self.n_vars = nx + nu + ns
+
+        self.pen_w = np.array(reward_params["pen_weights"])
 
         # defining model dynamics
         self.F = define_model(self.nx, self.nu, self.nd, self.n_params, self.dt)
-        self.constraints()
+        self.set_constraints(constraints)
 
-    def constraints(self):
-        self.u_min = np.zeros(self.nu)
-        self.u_max = np.ones(self.nu)
-        self.du_max = self.u_max * 0.1
+    def set_constraints(self, constraints: Dict[str, Any]):
+        self.du_max = self.delta_u_max * np.ones(self.nu)
 
-        self.pen_w = np.array([5e-5, 5e-3, 7e-4])
-        self.y_min = np.array([400, 15, 0])
-        self.y_max = np.array([1600, 25, 90])
+        self.y_min = np.array([constraints["co2_min"], constraints["temp_min"], constraints["rh_min"]])
+        self.y_max = np.array([constraints["co2_max"], constraints["temp_max"], constraints["rh_max"]])
 
     def set_slack_variables(
         self,
@@ -270,9 +278,9 @@ class MPC:
             # economic objective
             # convert boil power to kWh (costs for heating)
             # convert lamp electricity to kWh (costs for lighting)
-            J += 0.09 * P[108]/P[46] *1e-3 * Uk[0]/hour_conversion + \
-                0.2 * P[172] * 1e-3 * Uk[4]/hour_conversion + \
-                0.3 * Uk[1]* P[109]/P[46] * 1e-6 * self.dt                        # costs for CO2
+            J += self.reward_params["heating_price"] * P[108]/P[46] * 1e-3 * Uk[0]/hour_conversion + \
+                self.reward_params["elec_price"] * P[172] * 1e-3 * Uk[4]/hour_conversion + \
+                self.reward_params["co2_price"] * Uk[1]* P[109]/P[46] * 1e-6 * self.dt                        # costs for CO2
 
             S, S_constraints, S_lbg, S_ubg = self.set_slack_variables(k, X_next, S)
             g.extend(S_constraints)
@@ -281,8 +289,8 @@ class MPC:
 
             J += ca.sum1(S[:, k])
 
-        J += - (X[25, -1]-X0[25])* 1e-6 / 0.06 * 1.2              # revenue from selling tomatoes
-
+        # revenue from selling tomatoes (EUR/m2/day)
+        J += - (X[25, -1]-X0[25])* 1e-6 / self.reward_params["dmfm"] * self.reward_params["fruit_price"]              
         # Decision variables
         w = ca.vertcat(ca.vec(U), ca.vec(X), ca.vec(S))
 

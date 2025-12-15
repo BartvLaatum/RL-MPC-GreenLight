@@ -23,7 +23,12 @@ class RLMPC(MPC):
         n_params: int,
         nd: int,
         dt: float,
-        Np: int,
+        horizon: int,
+        u_min: List[float],
+        u_max: List[float],
+        delta_u_max: float,
+        constraints: Dict[str, Any],
+        reward_params: Dict[str, Any],
         region_range: float,
         nlp_opts: Dict[str, Any],
         terminal_constraint: bool,
@@ -31,7 +36,21 @@ class RLMPC(MPC):
         model: BaseAlgorithm,
         terminal_penalty: bool = False,
     ) -> None:
-        super().__init__(nx, nu, ns, n_params, nd, dt, Np, nlp_opts)
+        super().__init__(
+            nx,
+            nu,
+            ns,
+            n_params,
+            nd,
+            dt,
+            horizon,
+            u_min,
+            u_max,
+            delta_u_max,
+            constraints,
+            reward_params,
+            nlp_opts,
+        )
         self.terminal_constraint = terminal_constraint
         self.terminal_penalty = terminal_penalty
         self.eval_env = eval_env
@@ -43,8 +62,7 @@ class RLMPC(MPC):
         self.terminal_penalty_weights[...] = 1e-5
 
         # defining model dynamics
-        self.F = define_model(self.nx, self.nu, self.nd, self.n_params, self.dt)
-        self.constraints()
+        # self.F = define_model(self.nx, self.nu, self.nd, self.n_params, self.dt)
 
     def unroll_actor(self, horizon=1, freeze=True):
         """
