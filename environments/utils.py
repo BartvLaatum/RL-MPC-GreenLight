@@ -454,29 +454,6 @@ def convert_rh_ppm(X: np.ndarray) -> np.ndarray:
     return X
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--month", required=True, type=str)
-    parser.add_argument("--dt", required=True, type=float)
-    
-    args = parser.parse_args()
-    months = {
-        "january": 0,
-        "june": 151,
-    }
-    weather = load_weather_data(
-        weatherDataDir="weather/", 
-        location="",
-        source="KASPRO",
-        growthYear=2023,
-        startDay=months[args.month],
-        n_days=31,
-        predHorizon=1,
-        h=args.dt,
-        nd=10
-    )
-    np.savetxt(f"weather/{args.month}/weather-{int(args.dt)}dt.csv", weather, delimiter=",")
-
 
 def define_model(nx: int, nu: int, nd: int, n_params: int, dt: float) -> ca.Function:
     # Define the symbolic variables for CasADi
@@ -530,3 +507,27 @@ def init_state(d0, rhMax, time_in_days):
     state[26] = 3.0978e3    # tCanSum
     state[27] = time_in_days # time
     return state
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--month", required=True, type=str)
+    parser.add_argument("--dt", required=True, type=float)
+    
+    args = parser.parse_args()
+    months = {
+        "january": 0,
+        "june": 151,
+    }
+    weather = load_weather_data(
+        weatherDataDir="weather/", 
+        location="",
+        source="KASPRO",
+        growthYear=2023,
+        startDay=months[args.month],
+        n_days=31,
+        predHorizon=1,
+        h=args.dt,
+        nd=10
+    )
+    np.savetxt(f"weather/{args.month}/weather-{int(args.dt)}dt.csv", weather, delimiter=",")
