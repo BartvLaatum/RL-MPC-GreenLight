@@ -313,18 +313,16 @@ class TomatoEnv(GreenLightEnv):
         self.hour_of_day = 0
 
         # load in weather data for specific simulation
-        self.weather_data = load_dummy_weather(self.season_length, self.start_day, self.dt, self.Np, month="june")
-        # load_weather_data, load_dummy_weather(
-        #     self.weather_data_dir,
-        #     self.location,
-        #     self.data_source,
-        #     self.growth_year,
-        #     self.start_day,
-        #     self.season_length,
-        #     self.Np+1,
-        #     self.dt,
-        #     self.nd
-        # )
+        self.weather_data = load_weather_data(
+            weather_data_dir=self.weather_data_dir,
+            location=self.location,
+            growth_year=self.growth_year,
+            start_day=self.start_day,
+            n_days=self.season_length,
+            pred_horizon=self.pred_horizon,
+            h=self.dt,
+            nd=self.nd
+        )
 
         self.u = np.ones(self.nu) * 0.5  # initial control input
         self.x = init_state(self.weather_data[0], 85., 0)
