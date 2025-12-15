@@ -1,10 +1,10 @@
 import argparse
-from common.utils import load_rl_env_params, load_model_hyperparams
+from common.utils import load_env_params, load_model_hyperparams
 from experiments.rl_experiment_manager import RLExperimentManager
 
 def main(args: argparse.Namespace):
     env_config_path = f"configs/envs/"
-    env_base_params, env_specific_params = load_rl_env_params(args.env_id, env_config_path)
+    env_base_params, env_specific_params = load_env_params(args.env_id, env_config_path)
     hyperparameters = load_model_hyperparams(args.algorithm, args.env_id)
     # Initialize the experiment manager
     experiment_manager = RLExperimentManager(
