@@ -38,7 +38,7 @@ class MPC:
         self.reward_params = reward_params
         self.nlp_opts = nlp_opts
         self.n_vars = nx + nu + ns
-
+        self.hour_conversion = 3600/dt
         self.pen_w = np.array(reward_params["pen_weights"])
 
         # defining model dynamics
@@ -156,9 +156,6 @@ class MPC:
         # Initialize state trajectory
         Xk = X0
 
-        # # Initialize c as a (n+m) vector of zeros
-        hour_conversion = 3600/self.dt
-
         # initialize constraints
         g =  []
         self.lbg = []
@@ -185,8 +182,8 @@ class MPC:
             # economic objective
             # convert boil power to kWh (costs for heating)
             # convert lamp electricity to kWh (costs for lighting)
-            J += 0.09 * P[108]/P[46] *1e-3 * Uk[0]/hour_conversion + \
-                0.2 * P[172] * 1e-3 * Uk[4]/hour_conversion + \
+            J += 0.09 * P[108]/P[46] *1e-3 * Uk[0]/self.hour_conversion + \
+                0.2 * P[172] * 1e-3 * Uk[4]/self.hour_conversion + \
                 0.3 * Uk[1]* P[109]/P[46] * 1e-6 * self.dt                        # costs for CO2
 
 
@@ -241,8 +238,6 @@ class MPC:
         # Initialize state trajectory
         # Xk = X0
 
-        hour_conversion = 3600/self.dt
-
         # initialize constraints
         g =  []
         self.lbg = []
@@ -278,8 +273,8 @@ class MPC:
             # economic objective
             # convert boil power to kWh (costs for heating)
             # convert lamp electricity to kWh (costs for lighting)
-            J += self.reward_params["heating_price"] * P[108]/P[46] * 1e-3 * Uk[0]/hour_conversion + \
-                self.reward_params["elec_price"] * P[172] * 1e-3 * Uk[4]/hour_conversion + \
+            J += self.reward_params["heating_price"] * P[108]/P[46] * 1e-3 * Uk[0]/self.hour_conversion + \
+                self.reward_params["elec_price"] * P[172] * 1e-3 * Uk[4]/self.hour_conversion + \
                 self.reward_params["co2_price"] * Uk[1]* P[109]/P[46] * 1e-6 * self.dt                        # costs for CO2
 
             S, S_constraints, S_lbg, S_ubg = self.set_slack_variables(k, X_next, S)

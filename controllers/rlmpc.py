@@ -56,6 +56,7 @@ class RLMPC(MPC):
         self.eval_env = eval_env
         self.model = model
         self.region_range = region_range
+
         # penalize deviations in first 3 climate states and fruit biomass
         # self.terminal_penalty_weights = np.zeros(shape=(3,))
         self.terminal_penalty_weights = np.zeros(shape=(self.nx,))
@@ -219,9 +220,6 @@ class RLMPC(MPC):
         # Initialize state trajectory
         Xk = X0
 
-        # # Initialize c as a (n+m) vector of zeros
-        hour_conversion = 3600/self.dt
-
         # initialize constraints
         g =  []
         self.lbg = []
@@ -256,8 +254,8 @@ class RLMPC(MPC):
             # economic objective
             # convert boil power to kWh (costs for heating)
             # convert lamp electricity to kWh (costs for lighting)
-            J += 0.09 * P[108]/P[46] *1e-3 * Uk[0]/hour_conversion + \
-                0.2 * P[172] * 1e-3 * Uk[4]/hour_conversion + \
+            J += 0.09 * P[108]/P[46] *1e-3 * Uk[0]/self.hour_conversion + \
+                0.2 * P[172] * 1e-3 * Uk[4]/self.hour_conversion + \
                 0.3 * Uk[1]* P[109]/P[46] * 1e-6 * self.dt                        # costs for CO2
 
             S, S_constraints, S_lbg, S_ubg = self.set_slack_variables(k, Xk, S)
@@ -312,8 +310,6 @@ class RLMPC(MPC):
 
         # Initialize state trajectory
         # Xk = X0
-
-        hour_conversion = 3600/self.dt
 
         # initialize constraints
         g =  []
@@ -376,8 +372,8 @@ class RLMPC(MPC):
             # economic objective
             # convert boil power to kWh (costs for heating)
             # convert lamp electricity to kWh (costs for lighting)
-            J += 0.09 * P[108]/P[46] *1e-3 * Uk[0]/hour_conversion + \
-                0.2 * P[172] * 1e-3 * Uk[4]/hour_conversion + \
+            J += 0.09 * P[108]/P[46] *1e-3 * Uk[0]/self.hour_conversion + \
+                0.2 * P[172] * 1e-3 * Uk[4]/self.hour_conversion + \
                 0.3 * Uk[1]* P[109]/P[46] * 1e-6 * self.dt                        # costs for CO2
 
             S, S_constraints, S_lbg, S_ubg = self.set_slack_variables(k, X_next, S)
@@ -405,62 +401,3 @@ class RLMPC(MPC):
 
         # Create solver
         self.solver_multi = ca.nlpsol("solver", "ipopt", nlp, self.nlp_opts)
-
-# if __name__ == "__main__":
-#     parser = argparse.ArgumentParser()
-#     parser.add_argument("--project", type=str, default="GL-MPC-RL")
-#     parser.add_argument("--env_id", type=str, default="TomatoEnv")
-#     parser.add_argument("--save_name", type=str)
-#     parser.add_argument("--weather_filename", default="weather-300dt.csv", type=str)
-#     parser.add_argument("--algorithm", type=str, default="ppo")
-#     parser.add_argument("--model_name", type=str, default="graceful-planet-22")
-#     # parser.add_argument("--use_trained_vf", action="store_true")
-#     args = parser.parse_args()
-
-#     load_path = f"train_data/{args.project}/{args.algorithm}/deterministic"
-#     save_path = f"results/{args.project}/rlmpc"
-#     os.makedirs(save_path, exist_ok=True)
-
-#     rl_model_path = f"{load_path}/models/{args.model_name}/best_model.zip"
-#     # vf_path = f"{load_path}/models/{args.model_name}/vf.zip"
-#     env_path = f"{load_path}/envs/{args.model_name}/best_vecnormalize.pkl"
-
-#     base_env_params, specific_env_params = load_rl_env_params(args.env_id, "configs/envs/")
-    
-#     # load the hyperparameter for MPC and RL
-#     mpc_params = load_mpc_params(args.env_id)
-#     hyperparameters = load_rl_hyperparams(args.env_id, args.algorithm)
-
-#     eval_env = load_env(args.env_id, args.model_name, base_env_params, specific_env_params, load_path)
-#     eval_env.reset()
-#     model = ALGS[args.algorithm].load(rl_model_path, env=eval_env)
-
-#     n_params = 208
-#     nx = 28
-#     nu = 6
-#     ns = 6
-#     nd = 10
-#     dt = 300.
-#     n_days = 1
-#     month = "june"
-#     Np = 36
-
-#     kwargs = {
-#         "nx": nx,
-#         "nu": nu,
-#         "ns": ns,
-#         "n_params": n_params,
-#         "nd": nd,
-#         "dt": dt,
-#         "Np": Np,
-#         "nlp_opts": mpc_params["nlp_opts"],
-#         "eval_env": eval_env,
-#         "model": model,
-#     }
-
-#     rl_mpc = RLMPC(**kwargs)
-#     log = rl_mpc.unroll_actor()
-#     rl_mpc.define_nlp_multi()
-    
-#     rl_mpc.eval_env.reset()
-
