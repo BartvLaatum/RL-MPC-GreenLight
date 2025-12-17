@@ -20,6 +20,7 @@ def main(args: argparse.Namespace):
 
     # load in the environment parameters
     base_env_params, specific_env_params = load_env_params(args.env_id, "configs/envs/")
+    env_params = base_env_params.copy()
     # set the environment to test
     base_env_params["training"] = False
     # add prediction horizon to the season length to prevent env from resetting
@@ -41,22 +42,19 @@ def main(args: argparse.Namespace):
     eval_env.reset()
     model = ALGS[args.algorithm].load(rl_model_path, env=eval_env, device="cpu")
 
-    n_days = 1
-    month = "june"
-
     print(f"Running RL-MPC method...")
 
     rlmpc = RLMPC(
-        nx=base_env_params["nx"],
-        nu=base_env_params["nu"],
+        nx=env_params["nx"],
+        nu=env_params["nu"],
         ns=mpc_params["ns"],
-        n_params=base_env_params["num_params"],
-        nd=base_env_params["nd"],
-        dt=base_env_params["dt"],
+        n_params=env_params["num_params"],
+        nd=env_params["nd"],
+        dt=env_params["dt"],
         horizon=args.horizon,
-        u_min=base_env_params["u_min"],
-        u_max=base_env_params["u_max"],
-        delta_u_max=base_env_params["delta_u_max"],
+        u_min=env_params["u_min"],
+        u_max=env_params["u_max"],
+        delta_u_max=env_params["delta_u_max"],
         constraints=specific_env_params["constraints"],
         reward_params=specific_env_params["reward_params"],
         region_range=args.region_range,
@@ -69,23 +67,16 @@ def main(args: argparse.Namespace):
 
     exp = RLMPCExperimentManager(
         rlmpc,
-        # n_days=base_env_params["season_length"],
-        n_days=1/12,
-        location=base_env_params["location"],
-        growth_year=base_env_params["start_train_year"],
-        start_day=base_env_params["start_train_day"],
+        n_days=env_params["season_length"]-args.horizon/24,
+        location=env_params["location"],
+        growth_year=env_params["start_train_year"],
+        start_day=env_params["start_train_day"],
         offline_rl=args.offline_rl,
         extend_ocp_region=args.extend_ocp_region
     )
 
     rlmpc.define_nlp_multi()
     exp.solve_nmpc_multi()
-
-    result_columns = eval_env.env_method("get_obs_names")[0][:20]
-    result_columns.extend(["Rewards",  "EPI", "Penalty"])
-    # result_columns.extend(["temp_violation", "co2_violation", "rh_violation"])
-    # result_columns.extend(["episode"])
-    result = Results(result_columns)
 
     exp.X = convert_rh_ppm(exp.X)
     exp.save_data(save_dir)
