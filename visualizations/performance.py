@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import plot_config
 import matplotlib.cm as cm
 
-def load_rl_mpc_data(project, ablations):
+def load_rl_mpc_data(project, ablations, location, growth_year, start_day):
     data = {}
     BASE_DIR = os.path.join("results", project, "deterministic", "rlmpc")
     horizons = [1]
@@ -17,12 +17,12 @@ def load_rl_mpc_data(project, ablations):
 
     for ablation in ablations:
         for H in horizons:
-            U = np.loadtxt(os.path.join(BASE_DIR, ablation,  f"control-inputs-cs-300dt-{H}H.csv"), delimiter=",").T
-            X = np.loadtxt(os.path.join(BASE_DIR, ablation,  f"states-cs-300dt-{H}H.csv"), delimiter=",").T
-            times = np.loadtxt(os.path.join(BASE_DIR, ablation,  f"times-cs-300dt-{H}H.csv"), delimiter=",").T
-            rewards = np.loadtxt(os.path.join(BASE_DIR, ablation,  f"rewards-cs-300dt-{H}H.csv"), delimiter=",").T
-            EPI = np.loadtxt(os.path.join(BASE_DIR, ablation,  f"EPI-cs-300dt-{H}H.csv"), delimiter=",").T
-            penalties = np.loadtxt(os.path.join(BASE_DIR, ablation,  f"penalties-cs-300dt-{H}H.csv"), delimiter=",").T
+            U = np.loadtxt(os.path.join(BASE_DIR, ablation,  f"control-inputs-300dt-{H}H-{location}-{growth_year}-{start_day}.csv"), delimiter=",").T
+            X = np.loadtxt(os.path.join(BASE_DIR, ablation,  f"states-300dt-{H}H-{location}-{growth_year}-{start_day}.csv"), delimiter=",").T
+            times = np.loadtxt(os.path.join(BASE_DIR, ablation,  f"times-300dt-{H}H-{location}-{growth_year}-{start_day}.csv"), delimiter=",").T
+            rewards = np.loadtxt(os.path.join(BASE_DIR, ablation,  f"rewards-300dt-{H}H-{location}-{growth_year}-{start_day}.csv"), delimiter=",").T
+            EPI = np.loadtxt(os.path.join(BASE_DIR, ablation,  f"EPI-300dt-{H}H-{location}-{growth_year}-{start_day}.csv"), delimiter=",").T
+            penalties = np.loadtxt(os.path.join(BASE_DIR, ablation,  f"penalties-300dt-{H}H-{location}-{growth_year}-{start_day}.csv"), delimiter=",").T
             data[ablation][H] = {
                 "U": U,
                 "X": X,
@@ -36,18 +36,18 @@ def load_rl_mpc_data(project, ablations):
                 data[ablation][H]["rollout_x"] = offline_rl_x
     return data
 
-def load_mpc_data(project, mpc_folder):
+def load_mpc_data(project, mpc_folder, location, growth_year, start_day):
     data = {"mpc": {}}
     BASE_DIR = os.path.join("results", project, "deterministic", "mpc", mpc_folder)
     horizons = [1]
 
     for H in horizons:
-        U = np.loadtxt(os.path.join(BASE_DIR, f"control-inputs-cs-300dt-{H}H.csv"), delimiter=",").T
-        X = np.loadtxt(os.path.join(BASE_DIR, f"states-cs-300dt-{H}H.csv"), delimiter=",").T
-        times = np.loadtxt(os.path.join(BASE_DIR, f"times-cs-300dt-{H}H.csv"), delimiter=",").T
-        rewards = np.loadtxt(os.path.join(BASE_DIR, f"rewards-cs-300dt-{H}H.csv"), delimiter=",").T
-        EPI = np.loadtxt(os.path.join(BASE_DIR, f"EPI-cs-300dt-{H}H.csv"), delimiter=",").T
-        penalties = np.loadtxt(os.path.join(BASE_DIR, f"penalties-cs-300dt-{H}H.csv"), delimiter=",").T
+        U = np.loadtxt(os.path.join(BASE_DIR, f"control-inputs-300dt-{H}H-{location}-{growth_year}-{start_day}.csv"), delimiter=",").T
+        X = np.loadtxt(os.path.join(BASE_DIR, f"states-300dt-{H}H-{location}-{growth_year}-{start_day}.csv"), delimiter=",").T
+        times = np.loadtxt(os.path.join(BASE_DIR, f"times-300dt-{H}H-{location}-{growth_year}-{start_day}.csv"), delimiter=",").T
+        rewards = np.loadtxt(os.path.join(BASE_DIR, f"rewards-300dt-{H}H-{location}-{growth_year}-{start_day}.csv"), delimiter=",").T
+        EPI = np.loadtxt(os.path.join(BASE_DIR, f"EPI-300dt-{H}H-{location}-{growth_year}-{start_day}.csv"), delimiter=",").T
+        penalties = np.loadtxt(os.path.join(BASE_DIR, f"penalties-300dt-{H}H-{location}-{growth_year}-{start_day}.csv"), delimiter=",").T
         data["mpc"][H] = {
             "U": U,
             "X": X,
@@ -58,7 +58,7 @@ def load_mpc_data(project, mpc_folder):
         }
     return data
 
-def load_rl_data(project, model_names):
+def load_rl_data(project, model_names, location, growth_year, start_day):
     data = {
         "rl": {model_name: {} for model_name in model_names}
     }
@@ -66,7 +66,7 @@ def load_rl_data(project, model_names):
 
     for model_name in model_names:
         print(model_name)
-        rl_data = pd.read_csv(os.path.join(BASE_DIR, model_name + ".csv"))
+        rl_data = pd.read_csv(os.path.join(BASE_DIR, f"{model_name}-{location}-{growth_year}-{start_day}.csv"))
         
         U = rl_data[["uBoil", "uCo2", "uThScr", "uVent", "uLamp", "uBlScr"]].values.T
         X = rl_data[["co2_air", "temp_air", "rh_air", "pipe_temp", "cFruit"]].values.T
@@ -366,6 +366,12 @@ if __name__ == "__main__":
                         help="Project name for data loading.")
     parser.add_argument("--dt", type=int, default=300,
                         help="Time step in seconds.")
+    parser.add_argument("--location", type=str, default="Netherlands",
+                        help="Location for data loading.")
+    parser.add_argument("--growth_year", type=int, default=2023,
+                        help="Growth year for data loading.")
+    parser.add_argument("--start_day", type=int, default=151,
+                        help="Start day for data loading.")
 
     # Plot control arguments
     parser.add_argument("--plot_rewards", action="store_true", default=False,
@@ -415,11 +421,11 @@ if __name__ == "__main__":
     mpc_data = {}
     rl_data = {}
     if args.load_rlmpc:
-        rlmpc_data = load_rl_mpc_data(args.project, args.rlmpc_folders)
+        rlmpc_data = load_rl_mpc_data(args.project, args.rlmpc_folders, args.location, args.growth_year, args.start_day)
     if args.load_mpc:
-        mpc_data = load_mpc_data(args.project, args.mpc_folder)
+        mpc_data = load_mpc_data(args.project, args.mpc_folder, args.location, args.growth_year, args.start_day)
     if args.load_rl:
-        rl_data = load_rl_data(args.project, args.model_names)
+        rl_data = load_rl_data(args.project, args.model_names, args.location, args.growth_year, args.start_day)
     data = {**rl_data, **mpc_data, **rlmpc_data}
     print("Data loaded successfully.")
 
