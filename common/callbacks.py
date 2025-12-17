@@ -196,6 +196,7 @@ class CustomWandbCallback(EvalCallback):
 
                     obs_names = self.eval_env.env_method("get_obs_names")[0][:23]
                     obs_df = pd.DataFrame(add_info["observations"][0][:int(5*86400/900)], columns=obs_names)
+                    obs_df["timestep"] = range(len(obs_df))
                     table = wandb.Table(dataframe=obs_df)
                     # Create a linspace vector for x-axis
                     cols2plot = ["co2_air", "temp_air","rh_air",  "pipe_temp", "cFruit","uBoil", "uCo2", "uThScr", "uVent", "uLamp", "uBlScr"]
