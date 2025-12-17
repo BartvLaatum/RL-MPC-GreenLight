@@ -306,7 +306,6 @@ class TomatoEnv(GreenLightEnv):
             self.growth_year = self._np_random.choice(self.eval_options["eval_years"])
             self.start_day = self._np_random.choice(self.eval_options["eval_days"])
             self.location = self.eval_options["location"]
-            self.data_source = self.eval_options["data_source"]
             self.increase_eval_idx()
 
         self.day_of_year = self.start_day
@@ -325,7 +324,7 @@ class TomatoEnv(GreenLightEnv):
         )
 
         self.u = np.ones(self.nu) * 0.5  # initial control input
-        self.x = init_state(self.weather_data[0], 85., 0)
+        self.x = init_state(self.weather_data[0], 85.)
         self.x_prev = np.copy(self.x)
         self.timestep = 0
         self.obs = self._get_obs()

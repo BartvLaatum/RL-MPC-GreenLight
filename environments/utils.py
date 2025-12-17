@@ -472,7 +472,7 @@ def define_model(nx: int, nu: int, nd: int, n_params: int, dt: float) -> ca.Func
 
     return F
 
-def init_state(d0, rhMax, time_in_days):
+def init_state(d0, rhMax):
     """Initialize greenhouse state vector"""
     state = np.zeros(28)
     state[0] = d0[3]        # co2Air
@@ -502,5 +502,4 @@ def init_state(d0, rhMax, time_in_days):
     state[24] = 2.5107e5    # cStem
     state[25] = 5.5338e4    # cFruit
     state[26] = 3.0978e3    # tCanSum
-    state[27] = time_in_days # time
     return state
