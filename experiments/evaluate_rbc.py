@@ -52,7 +52,7 @@ F = define_model(nx, nu, nd, n_params, dt)
 rb_params = load_model_hyperparams('rule_based', env_id)
 rb_controller = RuleBasedController(nu=nu, **rb_params)
 
-x0 = init_state(d[0], 85.0, 0.0)
+x0 = init_state(d[0], 85.0)
 
 X = np.zeros((nx, N+1))
 U = np.zeros((nu, N))

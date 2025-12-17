@@ -58,7 +58,7 @@ class MPCExperimentManager:
             nd=10
         )
 
-        self.x0 = init_state(self.d_values[0], 85.0, 0.0)
+        self.x0 = init_state(self.d_values[0], 85.0)
         self.X = np.zeros((mpc.nx, self.N+1))
         self.U = np.zeros((mpc.nu, self.N+1))
 

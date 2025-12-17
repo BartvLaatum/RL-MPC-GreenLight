@@ -106,7 +106,4 @@ def ODE(x, u, d, p):
     # # Crop development stage, aka temperature sum  [°C day s^{-1}]
     dxdt[26] = (1./86400.) * x[4]
 
-    # time in days
-    dxdt[27] = 1./86400.
-
     return dxdt

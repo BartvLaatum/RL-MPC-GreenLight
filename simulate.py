@@ -15,7 +15,7 @@ nd = 7
 n_params = 208
 dt = 300
 
-x0 = init_state(weather[0], 85.0, 0.0)
+x0 = init_state(weather[0], 85.0)
 X = np.zeros((nx, N+1))
 p = init_default_params(n_params)
 F = define_model(nx, nu, nd, n_params, dt)
