@@ -18,7 +18,10 @@ def evaluate(model, env):
     N = env.get_attr("N")[0]
     epi, penalty, revenue, heat_cost, co2_cost, elec_cost = np.zeros(N+1), np.zeros(N+1), np.zeros(N+1), np.zeros(N+1), np.zeros(N+1),np.zeros(N+1)
     temp_violation, co2_violation, rh_violation = np.zeros(N+1), np.zeros(N+1), np.zeros(N+1)
-    episodic_obs = np.zeros((N+1, 20))
+    obs_names = env.env_method("get_obs_names")[0]
+    n_obs = len(obs_names)
+    # print(f"Number of observations: {n_obs}")
+    episodic_obs = np.zeros((N+1, n_obs))
     episode_rewards = np.zeros(N+1)
     episode_rewards = np.zeros(N+1)
     dones = np.zeros((1,), dtype=bool)
@@ -44,9 +47,9 @@ def evaluate(model, env):
         # episodic_obs[timestep] += env.unnormalize_obs(observations)[0, :23]
         if frame_stack:
             frames = np.split(observations, n_stack, axis=1)
-            episodic_obs[timestep] += env.unnormalize_obs(frames[-1])[0, :20]
+            episodic_obs[timestep] += env.unnormalize_obs(frames[-1])[0, :]
         else:
-            episodic_obs[timestep] += env.unnormalize_obs(observations)[0, :20]
+            episodic_obs[timestep] += env.unnormalize_obs(observations)[0, :]
 
         epi[timestep] += infos[0]["EPI"]
         penalty[timestep] += infos[0]["penalty"]
@@ -72,6 +75,9 @@ if __name__ == "__main__":
     parser.add_argument("--mode", type=str, choices=['deterministic', 'stochastic'], required=True)
     parser.add_argument("--frame_stack", action="store_true", help="Whether to use frame stacking")
     parser.add_argument("--n_stack", type=int, default=1, help="Number of frames to stack")
+    parser.add_argument("--location", type=str, default="Netherlands", help="Location")
+    parser.add_argument("--growth_year", type=int, default=2023, help="Growth year")
+    parser.add_argument("--start_day", type=int, default=151, help="Start day")
     args = parser.parse_args()
 
     assert not (args.mode == "deterministic" and args.uncertainty_scale != 0.0), \
@@ -90,7 +96,10 @@ if __name__ == "__main__":
     # load in the environment and model
     env_base_params, env_specific_params = load_env_params(args.env_id, env_config_path)
     model_params = load_model_hyperparams(args.algorithm, args.env_id)
-    # env_specific_params["uncertainty_scale"] = args.uncertainty_scale
+    env_specific_params["eval_options"]["location"] = args.location
+    env_specific_params["eval_options"]["eval_years"] = [args.growth_year]
+    env_specific_params["eval_options"]["eval_days"] = [args.start_day]
+
     eval_env = load_env(args.env_id, args.model_name, env_base_params, env_specific_params, load_path, args.frame_stack, args.n_stack)
 
     model = ALG[args.algorithm].load(join(load_path + f"models", f"{args.model_name}/best_model.zip"), device="cpu")
@@ -111,10 +120,6 @@ if __name__ == "__main__":
 
         result.update_result(result_data)
 
-    start_day = eval_env.get_attr("start_day")[0]
-    growth_year = eval_env.get_attr("growth_year")[0]
-    location = eval_env.get_attr("location")[0]
-
-    save_name = f"{args.model_name}-{location}-{growth_year}-{start_day}.csv"
+    save_name = f"{args.model_name}-{args.location}-{args.growth_year}-{args.start_day}.csv"
     print("saving results to", save_name)
     result.save(f"{save_dir}/{save_name}")
