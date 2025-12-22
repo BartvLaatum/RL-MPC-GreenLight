@@ -1,18 +1,14 @@
-import os
-import argparse
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
 import casadi as ca
 import numpy as np
 
 from controllers.mpc import MPC
 
-from stable_baselines3 import PPO, SAC
 from stable_baselines3.common.base_class import BaseAlgorithm
-from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize, VecFrameStack
+from stable_baselines3.common.vec_env import DummyVecEnv, VecFrameStack
 
-from environments.tomato_env import TomatoEnv
-from environments.utils import co2ppm2dens, rh2vaporDens, define_model 
+from environments.utils import co2ppm2dens, rh2vaporDens
 
 class RLMPC(MPC):
     def __init__(
@@ -34,6 +30,7 @@ class RLMPC(MPC):
         terminal_constraint: bool,
         eval_env: DummyVecEnv,
         model: BaseAlgorithm,
+        normalize_x: bool = False,
         terminal_penalty: bool = False,
     ) -> None:
         super().__init__(
@@ -56,16 +53,15 @@ class RLMPC(MPC):
         self.eval_env = eval_env
         self.model = model
         self.region_range = region_range
+        self.normalize_x = normalize_x
 
-        # penalize deviations in first 3 climate states and fruit biomass
-        # self.terminal_penalty_weights = np.zeros(shape=(3,))
-        self.terminal_penalty_weights = np.zeros(shape=(self.nx,))
-        self.terminal_penalty_weights[...] = 1e-5
+        if self.normalize_x:
+            logs = self.unroll_actor(horizon=288+self.Np+1, freeze=False)
+            self.x_norm = logs["x"].mean(axis=1)
 
-        # defining model dynamics
-        # self.F = define_model(self.nx, self.nu, self.nd, self.n_params, self.dt)
+        self.terminal_penalty_weight = 1e-5
 
-    def unroll_actor(self, horizon=1, freeze=True):
+    def unroll_actor(self, horizon: int = 1, freeze: bool = True) -> Dict[str, Any]:
         """
         Unrolls the actor function over the environment for a specified number of steps.
         Parameters:
@@ -154,6 +150,7 @@ class RLMPC(MPC):
                 obs_log.append(self.eval_env.unnormalize_obs(obs[0]).ravel())
             x_log.append(x)
             u_log.append(infos[0]["controls"])
+
         # Unfreeze environment (restore state after rollout)
         if freeze:
             self.eval_env.env_method("unfreeze")
@@ -172,7 +169,7 @@ class RLMPC(MPC):
 
         return log
 
-    def clip_bounds_terminal_state(self, x):
+    def clip_bounds_terminal_state(self, x: ca.DM) -> ca.DM:
         """
         Clip selected elements of terminal state vector `x` to physical bounds.
 
@@ -196,7 +193,7 @@ class RLMPC(MPC):
 
         return ca.vertcat(*[repl.get(i, x[i]) for i in range(x.size1())])
 
-    def define_nlp(self):
+    def define_nlp(self) -> None:
         """
         Defining the Non-linear program using CasADi.
         """
@@ -233,8 +230,10 @@ class RLMPC(MPC):
         # lower‐inequality: X[-1] ≥ 0.95 X_terminal
         print(f"Using terminal constraints: {self.terminal_constraint}")
         if self.terminal_constraint:
-
-            terminal_penalty = ca.dot(ca.DM(self.terminal_penalty_weights), ca.fabs(XN - X_terminal))
+            if self.normalize_x:
+                terminal_penalty = self.terminal_penalty_weight * ca.sum1(ca.fabs(XN - X_terminal)/self.x_norm)
+            else:
+                terminal_penalty = self.terminal_penalty_weight * ca.sum1(ca.fabs(XN - X_terminal))
             J += terminal_penalty
 
         # Loop over prediction horizon
@@ -287,7 +286,7 @@ class RLMPC(MPC):
         # Create solver
         self.solver_single = ca.nlpsol("solver", "ipopt", nlp, self.nlp_opts)
 
-    def define_nlp_multi(self):
+    def define_nlp_multi(self) -> None:
         """
         Defining the Non-linear program using CasADi.
         """
@@ -329,25 +328,21 @@ class RLMPC(MPC):
         # Terminal state constraints (optional, can be used for terminal constraints)        
         print(f"Using terminal constraints: {self.terminal_constraint}")
         if self.terminal_constraint:
-            # lower-inequality: X[:, -1] >= 0.95*X_terminal
-            # lower_region_constraint = self.clip_bounds_terminal_state(0.95*X_terminal)
-            # g.append(X[:, -1] - lower_region_constraint)
-            # g.append(X[:, -1] - 0.975*X_terminal)
             g.append(X[:, -1] - (1-self.region_range)*X_terminal)
-
+            # g.append(X[:, -1] - (X_terminal-self.region_range*self.x_norm))
             self.lbg.extend([0.0]*X_terminal.size1())
             self.ubg.extend([float('inf')]*X_terminal.size1())
 
-            # upper‐inequality: X[-1] <= 1.05*X_terminal
-            # upper_region_constraint = self.clip_bounds_terminal_state(1.05*X_terminal)
-            # g.append(X[:, -1] - upper_region_constraint)
-            # g.append(X[:, -1] - 1.025*X_terminal)
             g.append(X[:, -1] - (1+self.region_range)*X_terminal)
+            # g.append(X[:, -1] - (X_terminal+self.region_range*self.x_norm))
             self.lbg.extend([-float('inf')]*X_terminal.size1())
             self.ubg.extend([0.0]*X_terminal.size1())
 
         if self.terminal_penalty:
-            terminal_penalty = ca.dot(self.terminal_penalty_weights, ca.fabs(X[:, -1] - X_terminal))
+            if self.normalize_x:
+                terminal_penalty = self.terminal_penalty_weight * ca.sum1(ca.fabs(X[:, -1] - X_terminal)/self.x_norm)
+            else:
+                terminal_penalty = self.terminal_penalty_weight * ca.sum1(ca.fabs(X[:, -1] - X_terminal))
             J += terminal_penalty
 
         # Loop over prediction horizon
