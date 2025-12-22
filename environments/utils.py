@@ -472,9 +472,9 @@ def define_model(nx: int, nu: int, nd: int, n_params: int, dt: float) -> ca.Func
 
     return F
 
-def init_state(d0, rhMax):
+def init_state(d0, rhMax, nx=27):
     """Initialize greenhouse state vector"""
-    state = np.zeros(28)
+    state = np.zeros(nx)
     state[0] = d0[3]        # co2Air
     state[1] = state[0]     # co2Top
     state[2] = 18.5         # tAir
