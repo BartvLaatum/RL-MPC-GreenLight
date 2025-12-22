@@ -136,6 +136,11 @@ class MPC:
         penalties = np.dot(self.pen_w, lowerbound) + np.dot(self.pen_w, upperbound)
         return np.sum(penalties)
 
+    def economic_stage_cost(self, U: ca.MX, X: ca.MX, P: ca.MX):
+        return 0.09 * P[108]/P[46] *1e-3 * U[0]/self.hour_conversion + \
+                0.2 * P[172] * 1e-3 * U[4]/self.hour_conversion + \
+                0.3 * U[1]* P[109]/P[46] * 1e-6 * self.dt                        # costs for CO2
+
     def define_nlp(self):
         """
         Defining the Non-linear program using CasADi.
@@ -214,8 +219,13 @@ class MPC:
         # Create solver
         self.solver_single = ca.nlpsol("solver", "ipopt", nlp, self.nlp_opts)
 
+    def economic_stage_cost(self, P, Uk):
+        return self.reward_params["heating_price"] * P[108]/P[46] * 1e-3 * Uk[0]/self.hour_conversion + \
+            self.reward_params["elec_price"] * P[172] * 1e-3 * Uk[4]/self.hour_conversion + \
+            self.reward_params["co2_price"] * Uk[1]* P[109]/P[46] * 1e-6 * self.dt                        # costs for CO2
 
-
+    def revenue_stage_cost(self, X0, Xend):
+        return -(Xend[25]-X0[25])* 1e-6 / self.reward_params["dmfm"] * self.reward_params["fruit_price"]
 
     def define_nlp_multi(self):
         """
@@ -273,9 +283,7 @@ class MPC:
             # economic objective
             # convert boil power to kWh (costs for heating)
             # convert lamp electricity to kWh (costs for lighting)
-            J += self.reward_params["heating_price"] * P[108]/P[46] * 1e-3 * Uk[0]/self.hour_conversion + \
-                self.reward_params["elec_price"] * P[172] * 1e-3 * Uk[4]/self.hour_conversion + \
-                self.reward_params["co2_price"] * Uk[1]* P[109]/P[46] * 1e-6 * self.dt                        # costs for CO2
+            J += self.economic_stage_cost(P, Uk)
 
             S, S_constraints, S_lbg, S_ubg = self.set_slack_variables(k, X_next, S)
             g.extend(S_constraints)
@@ -285,7 +293,7 @@ class MPC:
             J += ca.sum1(S[:, k])
 
         # revenue from selling tomatoes (EUR/m2/day)
-        J += - (X[25, -1]-X0[25])* 1e-6 / self.reward_params["dmfm"] * self.reward_params["fruit_price"]              
+        J += self.revenue_stage_cost(X0, X)
         # Decision variables
         w = ca.vertcat(ca.vec(U), ca.vec(X), ca.vec(S))
 
