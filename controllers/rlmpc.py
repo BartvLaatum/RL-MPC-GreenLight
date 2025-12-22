@@ -193,99 +193,6 @@ class RLMPC(MPC):
 
         return ca.vertcat(*[repl.get(i, x[i]) for i in range(x.size1())])
 
-    def define_nlp(self) -> None:
-        """
-        Defining the Non-linear program using CasADi.
-        """
-        # Control variables (decision variables)
-        U = ca.MX.sym("U", self.nu, self.Np)
-        S = ca.MX.sym("S", self.ns, self.Np)
-        XN = ca.MX.sym("XN", 3)
-
-        # Parameters (initial state, disturbances, and parameters)
-        X0 = ca.MX.sym("X0", self.nx)
-        D = ca.MX.sym("D", self.nd, self.Np)
-        P = ca.MX.sym("P", self.n_params)
-        U0 = ca.MX.sym("U0", self.nu)  # Initial control input
-
-        # Terminal state (optional, can be used for terminal constraints)
-        X_terminal = ca.MX.sym("X_terminal", 3, 1)
-
-        # Initialize cost and constraints
-        J = 0
-
-        # Initialize state trajectory
-        Xk = X0
-
-        # initialize constraints
-        g =  []
-        self.lbg = []
-        self.ubg = []
-
-        g.append(U[:, 0] - U0)
-        self.lbg.extend(-self.du_max)
-        self.ubg.extend(self.du_max)
-
-        # Terminal state constraints (optional, can be used for terminal constraints)        
-        # lower‐inequality: X[-1] ≥ 0.95 X_terminal
-        print(f"Using terminal constraints: {self.terminal_constraint}")
-        if self.terminal_constraint:
-            if self.normalize_x:
-                terminal_penalty = self.terminal_penalty_weight * ca.sum1(ca.fabs(XN - X_terminal)/self.x_norm)
-            else:
-                terminal_penalty = self.terminal_penalty_weight * ca.sum1(ca.fabs(XN - X_terminal))
-            J += terminal_penalty
-
-        # Loop over prediction horizon
-        for k in range(self.Np):
-            Uk = U[:, k]
-            Dk = D[:, k]
-
-            if k > 0:
-                g.append(Uk - U[:, k-1])
-                self.lbg.extend(-self.du_max)
-                self.ubg.extend(self.du_max)
-
-            # Integrate to get the next state
-            res = self.F(x0=Xk, u=Uk, p=ca.vertcat(Dk, P))
-            Xk = res['xf']
-
-            # economic objective
-            # convert boil power to kWh (costs for heating)
-            # convert lamp electricity to kWh (costs for lighting)
-            J += 0.09 * P[108]/P[46] *1e-3 * Uk[0]/self.hour_conversion + \
-                0.2 * P[172] * 1e-3 * Uk[4]/self.hour_conversion + \
-                0.3 * Uk[1]* P[109]/P[46] * 1e-6 * self.dt                        # costs for CO2
-
-            S, S_constraints, S_lbg, S_ubg = self.set_slack_variables(k, Xk, S)
-            g.extend(S_constraints)
-            self.lbg.extend(S_lbg)
-            self.ubg.extend(S_ubg)
-
-            J += ca.sum1(S[:, k])
-
-
-        g.append(XN - Xk[0, 2, 15])
-        self.lbg.extend([0]*X_terminal.size1())
-        self.ubg.extend([0]*X_terminal.size1())
-
-        J += - (Xk[25]-X0[25])* 1e-6 / 0.06 * 1.2   # revenue from selling tomatoes
-
-        # Decision variables
-        w = ca.vertcat(ca.vec(U), ca.vec(S), ca.vec(XN))
-
-        # Constraints (empty if no constraints)
-        g_all = ca.vertcat(*g)
-
-        # Parameters for NLP
-        p_nlp = ca.vertcat(X0, U0, ca.vec(D), P, X_terminal)
-
-        # Define the NLP problem
-        nlp = {'x': w, 'f': J, 'g': g_all, 'p': p_nlp}
-
-        # Create solver
-        self.solver_single = ca.nlpsol("solver", "ipopt", nlp, self.nlp_opts)
-
     def define_nlp_multi(self) -> None:
         """
         Defining the Non-linear program using CasADi.
@@ -365,11 +272,7 @@ class RLMPC(MPC):
             self.ubg.extend([0]*self.nx)
 
             # economic objective
-            # convert boil power to kWh (costs for heating)
-            # convert lamp electricity to kWh (costs for lighting)
-            J += 0.09 * P[108]/P[46] *1e-3 * Uk[0]/self.hour_conversion + \
-                0.2 * P[172] * 1e-3 * Uk[4]/self.hour_conversion + \
-                0.3 * Uk[1]* P[109]/P[46] * 1e-6 * self.dt                        # costs for CO2
+            J += self.economic_stage_cost(P, Uk)
 
             S, S_constraints, S_lbg, S_ubg = self.set_slack_variables(k, X_next, S)
             g.extend(S_constraints)
@@ -378,7 +281,7 @@ class RLMPC(MPC):
 
             J += ca.sum1(S[:, k])
 
-        J += - (X[25, -1]-X0[25])* 1e-6 / 0.06 * 1.2              # revenue from selling tomatoes
+        J += self.revenue_stage_cost(X0, X[:, -1])              # revenue from selling tomatoes
 
         # Decision variables
         w = ca.vertcat(ca.vec(U), ca.vec(X), ca.vec(S))
@@ -396,3 +299,117 @@ class RLMPC(MPC):
 
         # Create solver
         self.solver_multi = ca.nlpsol("solver", "ipopt", nlp, self.nlp_opts)
+
+    # def define_nlp(self) -> None:
+    #     """
+    #     Defining the Non-linear program using CasADi.
+    #     """
+    #     # Control variables (decision variables)
+    #     U = ca.MX.sym("U", self.nu, self.Np)
+    #     S = ca.MX.sym("S", self.ns, self.Np)
+    #     XN = ca.MX.sym("XN", 3)
+
+    #     # Parameters (initial state, disturbances, and parameters)
+    #     X0 = ca.MX.sym("X0", self.nx)
+    #     D = ca.MX.sym("D", self.nd, self.Np)
+    #     P = ca.MX.sym("P", self.n_params)
+    #     U0 = ca.MX.sym("U0", self.nu)  # Initial control input
+
+    #     # Terminal state (optional, can be used for terminal constraints)
+    #     X_terminal = ca.MX.sym("X_terminal", 3, 1)
+
+    #     # Initialize cost and constraints
+    #     J = 0
+
+    #     # Initialize state trajectory
+    #     Xk = X0
+
+    #     # initialize constraints
+    #     g =  []
+    #     self.lbg = []
+    #     self.ubg = []
+
+    #     g.append(U[:, 0] - U0)
+    #     self.lbg.extend(-self.du_max)
+    #     self.ubg.extend(self.du_max)
+
+    #     # Terminal state constraints (optional, can be used for terminal constraints)        
+    #     # lower‐inequality: X[-1] ≥ 0.95 X_terminal
+    #     print(f"Using terminal constraints: {self.terminal_constraint}")
+    #     if self.terminal_constraint:
+    #         if self.normalize_x:
+    #             terminal_penalty = self.terminal_penalty_weight * ca.sum1(ca.fabs(XN - X_terminal)/self.x_norm)
+    #         else:
+    #             terminal_penalty = self.terminal_penalty_weight * ca.sum1(ca.fabs(XN - X_terminal))
+    #         J += terminal_penalty
+
+    #     # Loop over prediction horizon
+    #     for k in range(self.Np):
+    #         Uk = U[:, k]
+    #         Dk = D[:, k]
+
+    #         if k > 0:
+    #             g.append(Uk - U[:, k-1])
+    #             self.lbg.extend(-self.du_max)
+    #             self.ubg.extend(self.du_max)
+
+    #         # Integrate to get the next state
+    #         res = self.F(x0=Xk, u=Uk, p=ca.vertcat(Dk, P))
+    #         Xk = res['xf']
+
+    #         # economic objective
+    #         # convert boil power to kWh (costs for heating)
+    #         # convert lamp electricity to kWh (costs for lighting)
+    #         J += 0.09 * P[108]/P[46] *1e-3 * Uk[0]/self.hour_conversion + \
+    #             0.2 * P[172] * 1e-3 * Uk[4]/self.hour_conversion + \
+    #             0.3 * Uk[1]* P[109]/P[46] * 1e-6 * self.dt                        # costs for CO2
+
+    #         S, S_constraints, S_lbg, S_ubg = self.set_slack_variables(k, Xk, S)
+    #         g.extend(S_constraints)
+    #         self.lbg.extend(S_lbg)
+    #         self.ubg.extend(S_ubg)
+
+    #         J += ca.sum1(S[:, k])
+
+
+    #     g.append(XN - Xk[0, 2, 15])
+    #     self.lbg.extend([0]*X_terminal.size1())
+    #     self.ubg.extend([0]*X_terminal.size1())
+
+    #     J += - (Xk[25]-X0[25])* 1e-6 / 0.06 * 1.2   # revenue from selling tomatoes
+
+    #     # Decision variables
+    #     w = ca.vertcat(ca.vec(U), ca.vec(S), ca.vec(XN))
+
+    #     # Constraints (empty if no constraints)
+    #     g_all = ca.vertcat(*g)
+
+    #     # Parameters for NLP
+    #     p_nlp = ca.vertcat(X0, U0, ca.vec(D), P, X_terminal)
+
+    #     # Define the NLP problem
+    #     nlp = {'x': w, 'f': J, 'g': g_all, 'p': p_nlp}
+
+    #     # Create solver
+    #     self.solver_single = ca.nlpsol("solver", "ipopt", nlp, self.nlp_opts)
+
+    def reconstruct_costs(self, w_opt: ca.DM, X_terminal: ca.DM, p: ca.DM) -> float:
+        """
+        Reconstruct the costs from the solution.
+        """
+        us_opt = w_opt[:self.nu*self.Np].reshape(self.Np, self.nu).T
+        xs_opt = w_opt[self.nu*self.Np:self.nu*self.Np+self.nx*(self.Np+1)].reshape(self.Np+1, self.nx).T
+        s_opt = w_opt[-(self.ns*self.Np):].reshape(self.Np, self.ns).T
+
+        Js = []
+        for k in range(self.Np):
+            Jk = 0
+            Jk += self.economic_stage_cost(p, us_opt[:, k])
+            Jk += self.revenue_stage_cost(xs_opt[:, k], xs_opt[:, k+1])
+            Jk += ca.sum1(s_opt[:, k])
+            Js.append(Jk.full())
+
+        if self.terminal_penalty:
+            Jk = self.terminal_penalty_weight * ca.sum1(ca.fabs(xs_opt[:, -1] - X_terminal)/self.x_norm)
+            Js.append(Jk)
+        return np.array(Js).reshape(-1, 1)
