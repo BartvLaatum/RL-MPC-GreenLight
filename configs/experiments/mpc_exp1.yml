@@ -1,0 +1,6 @@
+project: GL-MPC-RL
+
+linear_solver: ma57   # linear solver to use for MPC
+horizon: 1            # prediction horizon in hours
+env_id: TomatoEnv     # environment to use
+month: june           # month to run the experiment in

@@ -4,7 +4,7 @@ GreenLightEnv:
   weather_data_dir: weather/ # path to weather data
   location: Netherlands             # location of the recorded weather data
   num_params: 208                 # number of model parameters
-  nx: 28                          # number of states
+  nx: 27                          # number of states
   nu: 6                           # number of control inputs
   nd: 10                          # number of weather disturbances
   dt: 300                         # [s] time step for the underlying GreenLight solver
@@ -43,7 +43,6 @@ TomatoEnv:
     eval_days: [151]                    # days to evaluate the agent on
     eval_years: [2023]                  # year to evaluate the agent on
     location: Netherlands                 # location of the greenhouse
-    data_source: KNMI                 # source of the weather data
 
   reward_params:
     elec_price: 0.2             # €/kWh
