@@ -25,7 +25,8 @@ def main(args: argparse.Namespace):
     base_env_params["training"] = False
     # add prediction horizon to the season length to prevent env from resetting
     base_env_params["season_length"] += args.horizon/24
-
+    specific_env_params["eval_options"]["eval_years"] = [args.growth_year]
+    specific_env_params["eval_options"]["eval_days"] = [args.start_day]
     # load the hyperparameter for MPC and RL
     mpc_params = load_model_hyperparams("mpc", args.env_id)
 
@@ -41,7 +42,6 @@ def main(args: argparse.Namespace):
 
     eval_env.reset()
     model = ALGS[args.algorithm].load(rl_model_path, env=eval_env, device="cpu")
-
     print(f"Running RL-MPC method...")
 
     rlmpc = RLMPC(
@@ -60,14 +60,16 @@ def main(args: argparse.Namespace):
         region_range=args.region_range,
         nlp_opts=mpc_params["nlp_opts"],
         terminal_constraint=args.terminal_constraint,
+        normalize_x=args.normalize_x,
         eval_env=eval_env,
         model=model,
         terminal_penalty=args.terminal_penalty,
     )
-
+    
     exp = RLMPCExperimentManager(
         rlmpc,
-        n_days=env_params["season_length"]-args.horizon/24,
+        n_days=env_params["season_length"],
+        # n_days=1/12,
         location=env_params["location"],
         growth_year=env_params["start_train_year"],
         start_day=env_params["start_train_day"],
@@ -85,18 +87,20 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--project", type=str, default="GL-MPC-RL")
     parser.add_argument("--env_id", type=str, default="TomatoEnv")
-    parser.add_argument("--save_name", type=str)
     parser.add_argument("--algorithm", type=str, default="ppo")
     parser.add_argument("--model_name", type=str, default="graceful-planet-22")
     parser.add_argument("--horizon", type=int, default=1, help="Prediction horizon in hours")
     parser.add_argument("--region_range", type=float, default=0.05, help="Region range")
-    parser.add_argument("--experiment_name", type=str, required=True, help="Name of the experiment")
     parser.add_argument("--offline_rl", action=argparse.BooleanOptionalAction, help="Use offline RL trajectory")
     parser.add_argument("--terminal_constraint", action=argparse.BooleanOptionalAction, help="Enable terminal constraint in MPC")
     parser.add_argument("--terminal_penalty", action=argparse.BooleanOptionalAction, help="Enable terminal constraint in MPC")
     parser.add_argument("--extend_ocp_region", action=argparse.BooleanOptionalAction, help="Extend OCP region")
+    parser.add_argument("--normalize_x", action=argparse.BooleanOptionalAction, help="Normalize states")
     parser.add_argument("--frame_stack", action="store_true", help="Whether to use frame stacking")
     parser.add_argument("--n_stack", type=int, default=1, help="Number of frames to stack")
+    parser.add_argument("--growth_year", type=int, default=2023, help="Growth year")
+    parser.add_argument("--start_day", type=int, default=151, help="Start day")
+    parser.add_argument("--experiment_name", type=str, required=True, help="Name of the experiment")
     args = parser.parse_args()
 
     main(args)
