@@ -65,11 +65,11 @@ def main(args: argparse.Namespace):
         model=model,
         terminal_penalty=args.terminal_penalty,
     )
-    
+
     exp = RLMPCExperimentManager(
         rlmpc,
-        n_days=env_params["season_length"],
-        # n_days=1/12,
+        # n_days=env_params["season_length"],
+        n_days=1/12,
         location=env_params["location"],
         growth_year=env_params["start_train_year"],
         start_day=env_params["start_train_day"],
@@ -82,6 +82,7 @@ def main(args: argparse.Namespace):
 
     exp.X = convert_rh_ppm(exp.X)
     exp.save_data(save_dir)
+    exp.save_costs(save_dir)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
