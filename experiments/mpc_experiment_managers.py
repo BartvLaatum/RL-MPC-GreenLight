@@ -298,6 +298,8 @@ class RLMPCExperimentManager(MPCExperimentManager):
         )
         self.offline_rl = offline_rl
         self.extend_ocp_region = extend_ocp_region
+        self.rl_costs = []
+        self.mpc_costs = []
 
     def solve_nmpc_multi(self):
         """
@@ -373,11 +375,20 @@ class RLMPCExperimentManager(MPCExperimentManager):
 
             # Extract the optimal decision variables from the solution
             w_opt = solution["x"].full().flatten()
+            mpc_costs_trajectory = self.mpc.reconstruct_costs(w_opt, x_init[:, -1], self.p)
+            self.rl_costs.append(-logs["reward_log"].flatten())
+            self.mpc_costs.append(mpc_costs_trajectory.flatten())
 
-            us_opt = w_opt[:self.mpc.nu*self.mpc.Np].reshape(self.mpc.Np, self.mpc.nu).T
-            xs_opt = w_opt[self.mpc.nu*self.mpc.Np:self.mpc.nu*self.mpc.Np+self.mpc.nx*(self.mpc.Np+1)].reshape(self.mpc.Np+1, self.mpc.nx).T
+            # select either control inputs and states from the RL policy or the MPC solution
+            if -logs["cumulative_reward"][0] < np.sum(mpc_costs_trajectory):
+                print("RL cost is better than MPC cost")
+                us_opt = logs["u"]
+                xs_opt = logs["x"]
+            else:
+                us_opt = w_opt[:self.mpc.nu*self.mpc.Np].reshape(self.mpc.Np, self.mpc.nu).T
+                xs_opt = w_opt[self.mpc.nu*self.mpc.Np:self.mpc.nu*self.mpc.Np+self.mpc.nx*(self.mpc.Np+1)].reshape(self.mpc.Np+1, self.mpc.nx).T
+
             s_opt = w_opt[-(self.mpc.ns*self.mpc.Np):].reshape(self.mpc.Np, self.mpc.ns).T
-
 
             # simulate the next time step
             self.U[:, ll+1] = us_opt[:, 0]
@@ -397,7 +408,7 @@ class RLMPCExperimentManager(MPCExperimentManager):
                 hour_of_day = self.mpc.eval_env.get_attr("hour_of_day")[0]
 
                 self.mpc.eval_env.env_method(
-                    "set_env_state", 
+                    "set_env_state",
                     *(xs_opt[:, -1], xs_opt[:, -2], us_opt[:, -1], ll+self.mpc.Np, hour_of_day, day_of_year)
                 )
                 logs = self.mpc.unroll_actor(horizon=1, freeze=False)
@@ -414,20 +425,20 @@ class RLMPCExperimentManager(MPCExperimentManager):
                 logs = self.mpc.unroll_actor(horizon=self.mpc.Np, freeze=True)
                 u_init = np.array(logs["u"])
                 x_init = np.array(logs["x"])
+
             # Update the initial guess for slack variables; using the rolled previous solution 
             s_init = np.concatenate([s_opt[:, 1:].T.flatten(), s_opt[:, -1].T.flatten()])
             w_init = np.concatenate([u_init.T.flatten(), x_init.T.flatten(), s_init])
 
-            # costs
-            self.EPI[ll, :] = \
-                (
-                    self.X[25, ll+1]-self.X[25, ll])* 1e-6 / 0.06 * 1.2 - \
-                    (0.09 * self.p[108]/self.p[46] * 1e-3 * us_opt[:, 0][0]/self.hour_conversion + \
-                    0.2 * self.p[172] * 1e-3 * us_opt[:, 0][4]/self.hour_conversion + \
-                    0.3 * us_opt[:, 0][1]* self.p[109]/self.p[46] * 1e-6 * self.mpc.dt
-                )
+            # Compute closed-loop performance and penalties
+            self.EPI[ll, :] =  -(self.mpc.revenue_stage_cost(self.X[:, ll], self.X[:, ll+1])+self.mpc.economic_stage_cost(self.p, us_opt[:, 0]))
             self.penalties[ll, :] = self.mpc.compute_penalties(self.X[:,ll+1])
-
             self.rewards[ll, :] = self.EPI[ll, :] - self.penalties[ll, :]
 
         print(f"Average solver time per iteration: {np.mean(self.exec_time)} (s)")
+
+    def save_costs(self, save_dir):
+        """Save the costs to a file."""
+        os.makedirs(save_dir, exist_ok=True)
+        np.savetxt(f"{save_dir}/rl_costs-{int(self.mpc.dt)}dt-{self.mpc.horizon}H-{self.location}-{self.growth_year}-{self.start_day}.csv", self.rl_costs, delimiter=",")
+        np.savetxt(f"{save_dir}/mpc_costs-{int(self.mpc.dt)}dt-{self.mpc.horizon}H-{self.location}-{self.growth_year}-{self.start_day}.csv", self.mpc_costs, delimiter=",")
