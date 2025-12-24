@@ -23,7 +23,6 @@ def evaluate(model, env):
     # print(f"Number of observations: {n_obs}")
     episodic_obs = np.zeros((N+1, n_obs))
     episode_rewards = np.zeros(N+1)
-    episode_rewards = np.zeros(N+1)
     dones = np.zeros((1,), dtype=bool)
     episode_starts = np.ones((1,), dtype=bool)
 
@@ -35,7 +34,13 @@ def evaluate(model, env):
         frame_stack = True
         n_stack = env.stacked_obs.n_stack
 
-    for timestep in range(N):
+    if frame_stack:
+        frames = np.split(observations, n_stack, axis=1)
+        episodic_obs[timestep] += env.unnormalize_obs(frames[-1])[0, :]
+    else:
+        episodic_obs[timestep] += env.unnormalize_obs(observations)[0, :]
+
+    for timestep in range(1, N+1):
         actions, states = model.predict(
             observations,  # type: ignore[arg-type]
             state=states,
@@ -43,7 +48,7 @@ def evaluate(model, env):
             deterministic=True,
     )
         observations, rewards, dones, infos = env.step(actions)
-        episode_rewards[timestep] += rewards[0]
+        episode_rewards[timestep-1] += rewards[0]
         # episodic_obs[timestep] += env.unnormalize_obs(observations)[0, :23]
         if frame_stack:
             frames = np.split(observations, n_stack, axis=1)
@@ -51,15 +56,15 @@ def evaluate(model, env):
         else:
             episodic_obs[timestep] += env.unnormalize_obs(observations)[0, :]
 
-        epi[timestep] += infos[0]["EPI"]
-        penalty[timestep] += infos[0]["penalty"]
-        revenue[timestep] += infos[0]["revenue"]
-        heat_cost[timestep] += infos[0]["heat_cost"]
-        elec_cost[timestep] += infos[0]["elec_cost"]
-        co2_cost[timestep] += infos[0]["co2_cost"]
-        temp_violation[timestep] += infos[0]["temp_violation"]
-        co2_violation[timestep] += infos[0]["co2_violation"]
-        rh_violation[timestep] += infos[0]["rh_violation"]
+        epi[timestep-1] += infos[0]["EPI"]
+        penalty[timestep-1] += infos[0]["penalty"]
+        revenue[timestep-1] += infos[0]["revenue"]
+        heat_cost[timestep-1] += infos[0]["heat_cost"]
+        elec_cost[timestep-1] += infos[0]["elec_cost"]
+        co2_cost[timestep-1] += infos[0]["co2_cost"]
+        temp_violation[timestep-1] += infos[0]["temp_violation"]
+        co2_violation[timestep-1] += infos[0]["co2_violation"]
+        rh_violation[timestep-1] += infos[0]["rh_violation"]
         timestep += 1
 
     result_data = np.column_stack((episodic_obs, episode_rewards, epi, penalty, revenue, heat_cost, co2_cost, elec_cost, temp_violation, co2_violation, rh_violation))
