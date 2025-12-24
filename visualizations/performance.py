@@ -65,7 +65,6 @@ def load_rl_data(project, model_names, location, growth_year, start_day):
     BASE_DIR = os.path.join("results", project, "deterministic", "ppo")
 
     for model_name in model_names:
-        print(model_name)
         rl_data = pd.read_csv(os.path.join(BASE_DIR, f"{model_name}-{location}-{growth_year}-{start_day}.csv"))
         
         U = rl_data[["uBoil", "uCo2", "uThScr", "uVent", "uLamp", "uBlScr"]].values.T
@@ -82,7 +81,7 @@ def load_rl_data(project, model_names, location, growth_year, start_day):
         }
     return data
 
-def plot_control_trajectories(data, dt, labels, colors, linestyles, output_path=None, show=False):
+def plot_control_trajectories(data, dt, labels, colors, linestyles, output_path=None, show=False, N_to_plot=None):
     """Plot the optimized control trajectories."""
     control_labels_with_units = {
         0: r"$u_{heat}$",
@@ -103,6 +102,10 @@ def plot_control_trajectories(data, dt, labels, colors, linestyles, output_path=
                 U = data[method][model_name]["U"]
                 t = np.arange(0, U.shape[-1]*dt, dt)/86400
 
+                if N_to_plot:
+                    t = t[:N_to_plot]
+                    U = U[:, :N_to_plot]
+
                 axes[0,0].step(t[:-1], U[0, 1:], color=colors[color_idx], linestyle=linestyles[color_idx], label=labels[color_idx], where='post')
                 axes[0,1].step(t[:-1], U[1, 1:], color=colors[color_idx], linestyle=linestyles[color_idx], label=labels[color_idx], where='post')
                 axes[1,0].step(t[:-1], U[2, 1:], color=colors[color_idx], linestyle=linestyles[color_idx], label=labels[color_idx], where='post')
@@ -116,6 +119,10 @@ def plot_control_trajectories(data, dt, labels, colors, linestyles, output_path=
                 t = np.arange(0, U.shape[-1]*dt, dt)/86400
                 all_Hs = sorted(data[method].keys())
                 max_H = all_Hs[-1]
+
+                if N_to_plot:
+                    t = t[:N_to_plot]
+                    U = U[:, :N_to_plot]
 
                 axes[0,0].step(t[:-1], U[0,1:], color=colors[color_idx], linestyle=linestyles[color_idx], label=f"{labels[color_idx]} ({H}H)", where='post')
                 axes[0,1].step(t[:-1], U[1,1:], color=colors[color_idx], linestyle=linestyles[color_idx], label=f"{labels[color_idx]} ({H}H)", where='post')
@@ -141,7 +148,7 @@ def plot_control_trajectories(data, dt, labels, colors, linestyles, output_path=
     plt.close(fig)
 
 
-def plot_states(data, dt, labels, colors, linestyles, output_path=None, show=False):
+def plot_states(data, dt, labels, colors, linestyles, output_path=None, show=False, N_to_plot=None):
     """Plot the optimized state trajectories."""
     state_labels_with_units = {
         0: r"Air Temperature ($^\circ$C)",
@@ -166,6 +173,9 @@ def plot_states(data, dt, labels, colors, linestyles, output_path=None, show=Fal
             for i, model_name in enumerate(data[method].keys()):
                 X = data[method][model_name]["X"]
                 t = np.arange(0, X.shape[-1]*dt, dt)/86400
+                if N_to_plot:
+                    t = t[:N_to_plot]
+                    X = X[:, :N_to_plot]
                 axes[0,0].step(t[:], X[1, :], color=colors[color_idx], linestyle=linestyles[color_idx], label=labels[color_idx], where='post')
                 axes[0,1].step(t[:], X[0, :], color=colors[color_idx], linestyle=linestyles[color_idx], label=labels[color_idx], where='post')
                 axes[1,0].step(t[:], X[2, :], color=colors[color_idx], linestyle=linestyles[color_idx], label=labels[color_idx], where='post')
@@ -178,6 +188,9 @@ def plot_states(data, dt, labels, colors, linestyles, output_path=None, show=Fal
                 all_Hs = sorted(data[method].keys())
                 max_H = all_Hs[-1]
 
+                if N_to_plot:
+                    t = t[:N_to_plot]
+                    X = X[:, :N_to_plot]
                 axes[0,0].step(t, X[2,:], color=colors[color_idx], linestyle=linestyles[color_idx], label=labels[color_idx], where='post')
                 axes[0,1].step(t, X[0, :], color=colors[color_idx], linestyle=linestyles[color_idx], label=labels[color_idx], where='post')
                 axes[1,0].step(t, X[15, :], color=colors[color_idx], linestyle=linestyles[color_idx], label=labels[color_idx], where='post')
@@ -245,7 +258,7 @@ def plot_runtime(data, dt, labels, output_path=None, show=False):
         plt.show()
     plt.close(fig)
 
-def plot_rewards(data, dt, labels, colors, linestyles, output_path=None, show=False):
+def plot_rewards(data, dt, labels, colors, linestyles, output_path=None, show=False, N_to_plot=None):
     """Plot rewards, EPI, and penalties over time and print final summaries using tabulate."""
     from tabulate import tabulate
 
@@ -269,16 +282,21 @@ def plot_rewards(data, dt, labels, colors, linestyles, output_path=None, show=Fa
             rewards = RL["rewards"]
             EPI = RL["EPI"]
             penalties = RL["penalties"]
+            if N_to_plot:
+                rewards = rewards[:N_to_plot]
+                EPI = EPI[:N_to_plot]
+                penalties = penalties[:N_to_plot]
             t = np.arange(0, rewards.shape[-1] * dt, dt) / 86400
+
             ax[0].step(t, rewards.cumsum(), label=f"{labels[color_idx]}", color=colors[color_idx], linestyle=linestyles[color_idx])
             ax[1].step(t, EPI.cumsum(), color=colors[color_idx], linestyle=linestyles[color_idx])
             ax[2].step(t, penalties.cumsum(), color=colors[color_idx], linestyle=linestyles[color_idx])
 
             summary_table.append([
                 f"{labels[color_idx]} (RL)",
-                f"{rewards.cumsum()[-1]:.2f}",
-                f"{EPI.cumsum()[-1]:.2f}",
-                f"{penalties.cumsum()[-1]:.2f}"
+                f"{rewards.cumsum()[-1]:.3f}",
+                f"{EPI.cumsum()[-1]:.3f}",
+                f"{penalties.cumsum()[-1]:.3f}"
             ])
             color_idx += 1
 
@@ -289,15 +307,15 @@ def plot_rewards(data, dt, labels, colors, linestyles, output_path=None, show=Fa
         EPI = MPC["EPI"]
         penalties = MPC["penalties"]
         t = np.arange(0, rewards.shape[-1] * dt, dt) / 86400
-        ax[0].plot(t, rewards.cumsum(), label=f"MPC (1H)", color=colors[color_idx], linestyle=linestyles[color_idx])
-        ax[1].plot(t, EPI.cumsum(), color=colors[color_idx], linestyle=linestyles[color_idx])
-        ax[2].plot(t, penalties.cumsum(), color=colors[color_idx], linestyle=linestyles[color_idx])
+        ax[0].step(t, rewards.cumsum(), label=f"MPC (1H)", color=colors[color_idx], linestyle=linestyles[color_idx])
+        ax[1].step(t, EPI.cumsum(), color=colors[color_idx], linestyle=linestyles[color_idx])
+        ax[2].step(t, penalties.cumsum(), color=colors[color_idx], linestyle=linestyles[color_idx])
 
         summary_table.append([
             f"MPC (1H)",
-            f"{rewards.cumsum()[-1]:.2f}",
-            f"{EPI.cumsum()[-1]:.2f}",
-            f"{penalties.cumsum()[-1]:.2f}"
+            f"{rewards.cumsum()[-1]:.3f}",
+            f"{EPI.cumsum()[-1]:.3f}",
+            f"{penalties.cumsum()[-1]:.3f}"
         ])
         color_idx += 1
 
@@ -310,16 +328,15 @@ def plot_rewards(data, dt, labels, colors, linestyles, output_path=None, show=Fa
                 EPI = RL_MPC["EPI"]
                 penalties = RL_MPC["penalties"]
                 t = np.arange(0, rewards.shape[-1] * dt, dt) / 86400
-
-                ax[0].plot(t, rewards.cumsum(), label=f"{labels[color_idx]}", color=colors[color_idx], linestyle=linestyles[color_idx])
-                ax[1].plot(t, EPI.cumsum(), color=colors[color_idx], linestyle=linestyles[color_idx])
-                ax[2].plot(t, penalties.cumsum(), color=colors[color_idx], linestyle=linestyles[color_idx])
+                ax[0].step(t, rewards.cumsum(), label=f"{labels[color_idx]}", color=colors[color_idx], linestyle=linestyles[color_idx])
+                ax[1].step(t, EPI.cumsum(), color=colors[color_idx], linestyle=linestyles[color_idx])
+                ax[2].step(t, penalties.cumsum(), color=colors[color_idx], linestyle=linestyles[color_idx])
 
                 summary_table.append([
                     f"{labels[color_idx]}",
-                    f"{rewards.cumsum()[-1]:.2f}",
-                    f"{EPI.cumsum()[-1]:.2f}",
-                    f"{penalties.cumsum()[-1]:.2f}"
+                    f"{rewards.cumsum()[-1]:.3f}",
+                    f"{EPI.cumsum()[-1]:.3f}",
+                    f"{penalties.cumsum()[-1]:.3f}"
                 ])
                 color_idx += 1
 
