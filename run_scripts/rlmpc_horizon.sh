@@ -1,89 +1,60 @@
 #!/bin/bash
 export PYTHONPATH=$(pwd)
 
-for horizon in 1
-do
-    # python experiments/rlmpc_experiment.py \
-    #     --horizon "$horizon" \
-    #     --terminal_constraint \
-    #     --region_range 0.05 \
-    #     --experiment_name full-rollout-frame-stack \
-    #     --frame_stack \
-    #     --n_stack 2 \
-    #     --model_name stilted-dust-30 \
+# model_name="trim-durian-32"
+model_name="daily-glade-107"
+experiment_name="rlmpc-switch-daily-glade-107-0.05"
+region_range=0.05
+n_stack=2
+# growth_years=(2020 2023 2011 2012 2013 2014 2015 2016 2017 2018 2019)
+growth_years=(2014 2015 2016 2017 2018 2019)
+# growth_years=(2015)
 
+# Function to run experiments for a single growth year
+run_year() {
+    local growth_year=$1
+    for horizon in 2 3; do
+        if [[ "$growth_year" == "2014" && "$horizon" == "3" ]]; then
+            continue
+        fi
 
-    # python experiments/rlmpc_experiment.py \
-    #     --horizon "$horizon" \
-    #     --terminal_constraint \
-    #     --region_range 0.05 \
-    #     --experiment_name offline-frame-stack \
-    #     --offline_rl \
-    #     --frame_stack \
-    #     --n_stack 2 \
-    #     --model_name stilted-dust-30 \
+        if [[ "$growth_year" == "2015" && "$horizon" == "2" ]]; then
+            continue
+        fi
 
-    # python experiments/rlmpc_experiment.py \
-    #     --horizon "$horizon" \
-    #     --terminal_constraint \
-    #     --extend_ocp_region \
-    #     --region_range 0.05 \
-    #     --experiment_name extend-ocp-frame-stack \
-    #     --frame_stack \
-    #     --n_stack 2 \
-    #     --model_name stilted-dust-30 \
+        python experiments/rlmpc_experiment.py \
+            --project GL-MPC-RL \
+            --env_id TomatoEnv \
+            --algorithm ppo \
+            --model_name "$model_name" \
+            --horizon "$horizon" \
+            --region_range "$region_range" \
+            --terminal_constraint \
+            --terminal_penalty \
+            --normalize_x \
+            --frame_stack \
+            --n_stack "$n_stack" \
+            --normalize_x \
+            --experiment_name "$experiment_name" \
+            --growth_year "$growth_year" \
+            --start_day 151 \
+            --plant_state_env
 
-    # python experiments/rlmpc_experiment.py \
-    #     --horizon "$horizon" \
-    #     --terminal_constraint \
-    #     --terminal_penalty \
-    #     --region_range 0.05 \
-    #     --experiment_name full-rollout-frame-stack-terminal-penalty \
-    #     --frame_stack \
-    #     --n_stack 2 \
-    #     --model_name stilted-dust-30 \
+        echo -e "Subject: Finished RL-MPC evaluation for year $growth_year\n
+        \nFinished RL-MPC evaluation for year $growth_year with horizon $horizon at $(date).
+        \nModel name: $model_name" | msmtp hbpvanlaatum123@gmail.com
+    done
+}
 
-    # python experiments/rlmpc_experiment.py \
-    #     --horizon "$horizon" \
-    #     --terminal_constraint \
-    #     --terminal_penalty \
-    #     --extend_ocp_region \
-    #     --region_range 0.05 \
-    #     --experiment_name extend-ocp-frame-stack-terminal-penalty \
-    #     --frame_stack \
-    #     --n_stack 2 \
-    #     --model_name stilted-dust-30 \
+# Export function and variables for subshells
+export -f run_year
+export experiment_name model_name region_range n_stack
 
-    python experiments/rlmpc_experiment.py \
-        --horizon "$horizon" \
-        --terminal_constraint \
-        --terminal_penalty \
-        --extend_ocp_region \
-        --region_range 0.025 \
-        --experiment_name extend-ocp-frame-stack-terminal-penalty-0.025 \
-        --frame_stack \
-        --n_stack 2 \
-        --model_name trim-durian-32 \
+# Run growth year in parallel
+parallel --line-buffer -j 6 run_year ::: "${growth_years[@]}"
 
-
-    python experiments/rlmpc_experiment.py \
-        --horizon "$horizon" \
-        --terminal_constraint \
-        --terminal_penalty \
-        --region_range 0.025 \
-        --experiment_name full-rollout-frame-stack-terminal-penalty-0.025 \
-        --frame_stack \
-        --n_stack 2 \
-        --model_name trim-durian-32
-
-    # python experiments/rlmpc_experiment.py \
-    #     --horizon "$horizon" \
-    #     --terminal_constraint \
-    #     --terminal_penalty \
-    #     --region_range 0.025 \
-    #     --experiment_name test \
-    #     --frame_stack \
-    #     --n_stack 2 \
-    #     --model_name stilted-dust-30
-
-done
+# Wait for background job to complete
+wait
+echo -e "Subject: Finished RL-MPC evaluation for all years\n
+\nFinished RL-MPC evaluation for all years at $(date).
+\nModel name: $model_name" | msmtp hbpvanlaatum123@gmail.com
