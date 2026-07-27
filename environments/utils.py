@@ -503,3 +503,76 @@ def init_state(d0, rhMax, nx=27):
     state[25] = 5.5338e4    # cFruit
     state[26] = 3.0978e3    # tCanSum
     return state
+
+def plant_state_for_day(day):
+    """
+    Calculate the plant weight and canopy temperature sum for a given day of the year.
+    
+    At day_start (59) first of March,
+        the plant weight is half of the final weight and the canopy temperature sum is half of the final value.
+    At day_end (181) first of July,
+        the plant weight reaches the final weight and the canopy temperature sum reaches the final value.
+    
+    Parameters:
+    -----------
+    day : float or int
+        The current day of the year
+    
+    Returns:
+    --------
+    float, float
+        The plant weight at the given day and the canopy temperature sum at the given day
+    """
+    w_final=401691.0
+    tCanSum_final=3.0978e3
+    day_start=90
+    day_end=182
+    # Initial weight is half of final weight
+    w_initial = w_final / 2.0
+    tCanSum_initial = tCanSum_final / 2.0
+    
+    # Normalize day to [0, 1] range
+    t = (day - day_start) / (day_end - day_start)
+
+    # Sinusoidal growth (smooth S-curve)
+    # Using sine function: sin(t * π/2) goes from 0 to 1 as t goes from 0 to 1
+    # This gives a smooth acceleration curve
+    sine_scaled = np.sin(t * np.pi / 2)
+    weight = w_initial + (w_final - w_initial) * sine_scaled
+    tCanSum = tCanSum_initial + (tCanSum_final - tCanSum_initial) * sine_scaled
+    return weight, tCanSum
+
+# weight, tCanSum = plant_state_for_day(np.arange(90, 152))
+# print(weight.shape)
+# print(tCanSum.shape)
+
+# print(weight)
+# print(tCanSum)
+# import matplotlib.pyplot as plt
+
+
+# from datetime import datetime, timedelta
+
+# # Generate date labels for each day from day 90 to day 151 (inclusive)
+# base_year = 2019
+# start_doy = 90
+# end_doy = 152
+# date_labels = [datetime(base_year, 1, 1) + timedelta(days=int(doy) - 1) for doy in np.arange(start_doy, end_doy + 1)]
+
+# plt.figure(figsize=(12,6))
+# plt.plot(date_labels, weight)
+
+# # Format the x-ticks to strip the year (e.g., "Mar 31" instead of "2019-03-31")
+# import matplotlib.dates as mdates
+# ax = plt.gca()
+# ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %d'))  # show as "Mar 31", "Apr 15", etc.
+# plt.gcf().autofmt_xdate()  # Beautify the x-labels
+
+# plt.xlabel("Date")
+# plt.ylabel("Plant Weight (mg/m$^2$)")
+# plt.title("Plant Weight Over Dates")
+# plt.savefig("results/plant_weight.png")
+
+# print("Saved plant weight plot to results/plant_weight.png")
+# plt.plot(tCanSum)
+# plt.show()

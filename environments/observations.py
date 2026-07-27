@@ -61,11 +61,11 @@ class IndoorClimateObservations(BaseObservations):
     """
     def __init__(self, env) -> None:
         self.env = env
-        self.obs_names = ["co2_air", "temp_air","rh_air",  "pipe_temp"]
+        self.obs_names = ["co2_air", "temp_air", "rh_air", "pipe_temp"]
         self.n_obs = len(self.obs_names)
 
     def observation_space(self):
-        return spaces.Box(low=-1e-4, high=1e4, shape=(self.n_obs,), dtype=np.float32)
+        return spaces.Box(low=-1e4, high=1e4, shape=(self.n_obs,), dtype=np.float32)
 
     def compute_obs(self) -> np.ndarray:
         """
@@ -85,7 +85,7 @@ class BasicCropObservations(BaseObservations):
         self.n_obs = len(self.obs_names)
 
     def observation_space(self):
-        return spaces.Box(low=-1e-4, high=1e4, shape=(self.n_obs,), dtype=np.float32)
+        return spaces.Box(low=-1e4, high=1e4, shape=(self.n_obs,), dtype=np.float32)
 
     def compute_obs(self) -> np.ndarray:
         """
@@ -124,7 +124,7 @@ class WeatherObservations(BaseObservations):
         self.n_obs = len(self.obs_names)
 
     def observation_space(self) -> spaces.Box:
-        return spaces.Box(low=-1e-4, high=1e4, shape=(self.n_obs,), dtype=np.float32)
+        return spaces.Box(low=-1e4, high=1e4, shape=(self.n_obs,), dtype=np.float32)
 
     def compute_obs(self) -> np.ndarray:
         """
@@ -144,7 +144,7 @@ class TimeObservations(BaseObservations):
         self.n_obs = len(self.obs_names)
 
     def observation_space(self):
-        return spaces.Box(low=-1e-4, high=1e4, shape=(self.n_obs,), dtype=np.float32)
+        return spaces.Box(low=-1e4, high=1e4, shape=(self.n_obs,), dtype=np.float32)
 
     def compute_obs(self) -> np.ndarray:
         """
@@ -168,9 +168,8 @@ class WeatherForecastObservations(BaseObservations):
         self.n_obs = 5*self.env.Np
         self.obs_names = ["glob_rad", "temp_out", "rh_out", "co2_out", "wind_speed"]*self.env.Np
 
-
     def observation_space(self):
-        return spaces.Box(low=-1e-4, high=1e4, shape=(self.n_obs,), dtype=np.float32)
+        return spaces.Box(low=-1e4, high=1e4, shape=(self.n_obs,), dtype=np.float32)
 
     def compute_obs(self) -> np.ndarray:
         """

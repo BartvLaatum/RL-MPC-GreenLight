@@ -3,12 +3,13 @@ from typing import Any, Dict, List, Optional, Tuple, SupportsFloat
 
 import numpy as np
 import casadi as ca
+import gymnasium as gym
 from gymnasium import spaces
 
 from environments.base_env import GreenLightEnv
 from environments.observations import *
 from environments.rewards import BaseReward, GreenhouseReward, DummyReward
-from environments.utils import load_weather_data, load_dummy_weather, define_model, init_state
+from environments.utils import load_weather_data, load_dummy_weather, define_model, init_state, plant_state_for_day
 from model.parameters import init_default_params
 from environments.noise import parametric_crop_uncertainty
 
@@ -332,3 +333,24 @@ class TomatoEnv(GreenLightEnv):
 
         self.terminated = False
         return self.obs, {}
+
+class TomatoEnvPlantStateWrapper(gym.Wrapper):
+    def __init__(self, env: GreenLightEnv):
+        super().__init__(env)
+        self.env.train_days = np.arange(90, 152)
+        self.env.train_years = [2013, 2014, 2015, 2016, 2017, 2018]
+        # self.env.train_years = [2020]
+
+    def _set_plant_state(self) -> None:
+        cWeight, tCanSum = plant_state_for_day(self.env.day_of_year)
+        self.env.x[23] = cWeight*0.2
+        self.env.x[24] = cWeight*0.15
+        self.env.x[25] = cWeight*0.65
+        self.env.x[26] = tCanSum
+        self.env.x_prev = np.copy(self.env.x)
+
+    def reset(self, seed: Optional[int] = None) -> Tuple[np.ndarray, Dict[str, Any]]:
+        self.env.reset(seed=seed)
+        self._set_plant_state()
+        self.env.obs = self.env._get_obs()
+        return self.env.obs, {}

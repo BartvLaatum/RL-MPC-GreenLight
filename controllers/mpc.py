@@ -136,11 +136,6 @@ class MPC:
         penalties = np.dot(self.pen_w, lowerbound) + np.dot(self.pen_w, upperbound)
         return np.sum(penalties)
 
-    def economic_stage_cost(self, U: ca.MX, X: ca.MX, P: ca.MX):
-        return 0.09 * P[108]/P[46] *1e-3 * U[0]/self.hour_conversion + \
-                0.2 * P[172] * 1e-3 * U[4]/self.hour_conversion + \
-                0.3 * U[1]* P[109]/P[46] * 1e-6 * self.dt                        # costs for CO2
-
     def define_nlp(self):
         """
         Defining the Non-linear program using CasADi.

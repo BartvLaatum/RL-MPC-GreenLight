@@ -66,7 +66,7 @@ def evaluate(model, env):
         co2_violation[timestep-1] += infos[0]["co2_violation"]
         rh_violation[timestep-1] += infos[0]["rh_violation"]
         timestep += 1
-
+    print(f"Episode rewards: {sum(episode_rewards)}")
     result_data = np.column_stack((episodic_obs, episode_rewards, epi, penalty, revenue, heat_cost, co2_cost, elec_cost, temp_violation, co2_violation, rh_violation))
     return result_data[:-1]
 
@@ -83,6 +83,7 @@ if __name__ == "__main__":
     parser.add_argument("--location", type=str, default="Netherlands", help="Location")
     parser.add_argument("--growth_year", type=int, default=2023, help="Growth year")
     parser.add_argument("--start_day", type=int, default=151, help="Start day")
+    parser.add_argument("--plant_state_env", action="store_true", help="Whether to use plant state environment")
     args = parser.parse_args()
 
     assert not (args.mode == "deterministic" and args.uncertainty_scale != 0.0), \
@@ -105,12 +106,11 @@ if __name__ == "__main__":
     env_specific_params["eval_options"]["eval_years"] = [args.growth_year]
     env_specific_params["eval_options"]["eval_days"] = [args.start_day]
 
-    eval_env = load_env(args.env_id, args.model_name, env_base_params, env_specific_params, load_path, args.frame_stack, args.n_stack)
+    eval_env = load_env(args.env_id, args.model_name, env_base_params, env_specific_params, load_path, args.frame_stack, args.n_stack, args.plant_state_env)
 
     model = ALG[args.algorithm].load(join(load_path + f"models", f"{args.model_name}/best_model.zip"), device="cpu")
 
     result_columns = eval_env.env_method("get_obs_names")[0][:20]
-    print(result_columns)
     result_columns.extend(["Rewards",  "EPI", "Penalty", "Revenue", "Heat costs", "CO2 costs", "Elec costs"])
     result_columns.extend(["temp_violation", "co2_violation", "rh_violation"])
     result_columns.extend(["episode"])
@@ -122,8 +122,9 @@ if __name__ == "__main__":
         result_data = evaluate(model, eval_env)
         sim_column = np.full((result_data.shape[0], 1), sim)
         result_data = np.column_stack((result_data, sim_column))
-
-        result.update_result(result_data)
+        # Get the first 20 and last 9 columns from result_data, then concatenate
+        extracted_data = np.concatenate([result_data[:, :20], result_data[:, -11:]], axis=1)
+        result.update_result(extracted_data)
 
     save_name = f"{args.model_name}-{args.location}-{args.growth_year}-{args.start_day}.csv"
     print("saving results to", save_name)

@@ -37,7 +37,8 @@ def main(args: argparse.Namespace):
         specific_env_params,
         load_path,
         args.frame_stack,
-        args.n_stack
+        args.n_stack,
+        args.plant_state_env,
     )
 
     eval_env.reset()
@@ -68,13 +69,15 @@ def main(args: argparse.Namespace):
 
     exp = RLMPCExperimentManager(
         rlmpc,
-        # n_days=env_params["season_length"],
-        n_days=1/12,
+        n_days=env_params["season_length"],
+        # n_days=1/288,
         location=env_params["location"],
-        growth_year=env_params["start_train_year"],
-        start_day=env_params["start_train_day"],
+        growth_year=args.growth_year,
+        start_day=args.start_day,
         offline_rl=args.offline_rl,
-        extend_ocp_region=args.extend_ocp_region
+        extend_ocp_region=args.extend_ocp_region,
+        plant_state_env=args.plant_state_env,
+        selector_mechanism=args.selector_mechanism,
     )
 
     rlmpc.define_nlp_multi()
@@ -101,7 +104,8 @@ if __name__ == "__main__":
     parser.add_argument("--n_stack", type=int, default=1, help="Number of frames to stack")
     parser.add_argument("--growth_year", type=int, default=2023, help="Growth year")
     parser.add_argument("--start_day", type=int, default=151, help="Start day")
+    parser.add_argument("--plant_state_env", action="store_true", help="Whether to use plant state environment")
+    parser.add_argument("--selector_mechanism", action="store_true", help="Whether to use selector mechanism")
     parser.add_argument("--experiment_name", type=str, required=True, help="Name of the experiment")
     args = parser.parse_args()
-
     main(args)

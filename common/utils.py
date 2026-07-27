@@ -14,14 +14,22 @@ from stable_baselines3.common.vec_env import SubprocVecEnv, VecNormalize, VecMon
 
 from common.results import Results
 from common.callbacks import CustomWandbCallback, SaveVecNormalizeCallback, BaseCallback
-from environments.tomato_env import TomatoEnv
+from environments.tomato_env import TomatoEnv, TomatoEnvPlantStateWrapper
 
 ACTIVATION_FN = {"ReLU": ReLU, "SiLU": SiLU, "Tanh":Tanh, "ELU": ELU}
 OPTIMIZER = {"ADAM": Adam}
 ENVS = {"TomatoEnv": TomatoEnv}
 
-
-def load_env(env_id, model_name, env_base_params, env_specific_params, load_path, frame_stack=False, n_stack=1):
+def load_env(
+    env_id,
+    model_name,
+    env_base_params,
+    env_specific_params,
+    load_path,
+    frame_stack=False,
+    n_stack=1,
+    plant_state_env = None
+):
     """    
     Loads and configures a vectorized and normalized environment for evaluation.
 
@@ -47,6 +55,7 @@ def load_env(env_id, model_name, env_base_params, env_specific_params, load_path
         vec_norm_kwargs=None,
         eval_env=True,
         frame_stack=False,
+        plant_state_env=plant_state_env,
     )
     env = VecNormalize.load(join(load_path, "envs", f"{model_name}/best_vecnormalize.pkl"), env)
     env.training = False
@@ -56,7 +65,7 @@ def load_env(env_id, model_name, env_base_params, env_specific_params, load_path
     return env
 
 
-def make_env(env_id, rank, seed, env_base_params, env_specific_params, eval_env):
+def make_env(env_id, rank, seed, env_base_params, env_specific_params, eval_env, plant_state_env: Callable = None):
     '''
     Utility function for multiprocessed env.
 
@@ -65,6 +74,9 @@ def make_env(env_id, rank, seed, env_base_params, env_specific_params, eval_env)
     '''
     def _init():
         env = ENVS[env_id](**env_specific_params, base_env_params=env_base_params)
+        if plant_state_env is not None:
+            env = TomatoEnvPlantStateWrapper(env)
+
         # if not env.training:
         #     # env.start_days = options["start_days"]
         #     # # we fix the growth year for each individual evaluation environment
@@ -87,6 +99,7 @@ def make_vec_env(
     eval_env: bool = False,
     frame_stack: bool = False,
     n_stack: int = 1,
+    plant_state_env: Callable = None,
     ) -> VecEnv:
     """
     Creates a vectorized environment, with n individual envs.
@@ -94,7 +107,7 @@ def make_vec_env(
     # make dir if not exists
     if monitor_filename is not None and not os.path.exists(os.path.dirname(monitor_filename)):
         os.makedirs(os.path.dirname(monitor_filename), exist_ok=True)
-    env = SubprocVecEnv([make_env(env_id, rank, seed, env_base_params, env_specific_params, eval_env=eval_env) for rank in range(n_envs)])
+    env = SubprocVecEnv([make_env(env_id, rank, seed, env_base_params, env_specific_params, eval_env=eval_env, plant_state_env=plant_state_env) for rank in range(n_envs)])
     env = VecMonitor(env, filename=monitor_filename)
 
     if vec_norm_kwargs is not None:

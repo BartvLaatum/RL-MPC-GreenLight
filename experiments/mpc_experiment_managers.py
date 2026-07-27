@@ -2,17 +2,15 @@ import os
 import time
 import argparse
 from tqdm import tqdm
+import time
 
 import numpy as np
 import casadi as ca
 
 from controllers.mpc import MPC
-from environments.utils import load_weather_data, load_dummy_weather, init_state
+from environments.utils import load_weather_data, load_dummy_weather, init_state, plant_state_for_day
 from model.parameters import init_default_params
 
-# from visualizations.trajectories import plot_control_trajectories, plot_states
-
-import time
 
 class MPCExperimentManager:
     def __init__(
@@ -22,6 +20,7 @@ class MPCExperimentManager:
             location: str,
             growth_year: int,
             start_day: int,
+            plant_state_env: bool = False,
         ):
 
         self.mpc = mpc
@@ -34,7 +33,7 @@ class MPCExperimentManager:
         self.growth_year = growth_year
         self.start_day = start_day
         self.pred_horizon = mpc.horizon/24
-
+        self.plant_state_env = plant_state_env
         self.EPI = np.zeros((self.N, 1))
         self.penalties = np.zeros((self.N, 1))
         self.rewards = np.zeros((self.N, 1))
@@ -59,6 +58,13 @@ class MPCExperimentManager:
         )
 
         self.x0 = init_state(self.d_values[0], 85.0)
+        if self.plant_state_env:
+            plant_weight, tCanSum = plant_state_for_day(self.start_day)
+            self.x0[23] = plant_weight*0.2
+            self.x0[24] = plant_weight*0.15
+            self.x0[25] = plant_weight*0.65
+            self.x0[26] = tCanSum
+
         self.X = np.zeros((mpc.nx, self.N+1))
         self.U = np.zeros((mpc.nu, self.N+1))
 
@@ -270,6 +276,7 @@ class MPCExperimentManager:
     def save_data(self, save_dir):
         """Save the data to a file."""
         os.makedirs(save_dir, exist_ok=True)
+        print(f"{save_dir}/control-inputs-{int(self.mpc.dt)}dt-{self.mpc.horizon}H-{self.location}-{self.growth_year}-{self.start_day}.csv")
         np.savetxt(f"{save_dir}/control-inputs-{int(self.mpc.dt)}dt-{self.mpc.horizon}H-{self.location}-{self.growth_year}-{self.start_day}.csv", self.U.T, delimiter=",")
         np.savetxt(f"{save_dir}/solver-failure-{int(self.mpc.dt)}dt-{self.mpc.horizon}H-{self.location}-{self.growth_year}-{self.start_day}.csv", self.solver_failure, delimiter=",")
         np.savetxt(f"{save_dir}/states-{int(self.mpc.dt)}dt-{self.mpc.horizon}H-{self.location}-{self.growth_year}-{self.start_day}.csv", self.X.T, delimiter=",")
@@ -288,6 +295,8 @@ class RLMPCExperimentManager(MPCExperimentManager):
         start_day: int,
         offline_rl: bool = False,
         extend_ocp_region: bool = True,
+        plant_state_env: bool = False,
+        selector_mechanism: bool = False,
     ) -> None:
         super().__init__(
             rl_mpc,
@@ -295,11 +304,13 @@ class RLMPCExperimentManager(MPCExperimentManager):
             location,
             growth_year,
             start_day,
+            plant_state_env,
         )
         self.offline_rl = offline_rl
         self.extend_ocp_region = extend_ocp_region
         self.rl_costs = []
         self.mpc_costs = []
+        self.selector_mechanism = selector_mechanism
 
     def solve_nmpc_multi(self):
         """
@@ -367,7 +378,7 @@ class RLMPCExperimentManager(MPCExperimentManager):
                     p=p_all
                 )
 
-                # self.previous_solution = solution
+            # self.previous_solution = solution
             except Exception as e:
                 print(f"Solver failed at iteration {ll}: {e}")
                 self.solver_failure[ll] = 1
@@ -379,15 +390,18 @@ class RLMPCExperimentManager(MPCExperimentManager):
             self.rl_costs.append(-logs["reward_log"].flatten())
             self.mpc_costs.append(mpc_costs_trajectory.flatten())
 
+            if self.selector_mechanism:
             # select either control inputs and states from the RL policy or the MPC solution
-            if -logs["cumulative_reward"][0] < np.sum(mpc_costs_trajectory):
-                print("RL cost is better than MPC cost")
-                us_opt = logs["u"]
-                xs_opt = logs["x"]
+                if -logs["cumulative_reward"][0] < np.sum(mpc_costs_trajectory):
+                    print("RL cost is better than MPC cost")
+                    us_opt = logs["u"]
+                    xs_opt = logs["x"]
+                else:
+                    us_opt = w_opt[:self.mpc.nu*self.mpc.Np].reshape(self.mpc.Np, self.mpc.nu).T
+                    xs_opt = w_opt[self.mpc.nu*self.mpc.Np:self.mpc.nu*self.mpc.Np+self.mpc.nx*(self.mpc.Np+1)].reshape(self.mpc.Np+1, self.mpc.nx).T
             else:
                 us_opt = w_opt[:self.mpc.nu*self.mpc.Np].reshape(self.mpc.Np, self.mpc.nu).T
                 xs_opt = w_opt[self.mpc.nu*self.mpc.Np:self.mpc.nu*self.mpc.Np+self.mpc.nx*(self.mpc.Np+1)].reshape(self.mpc.Np+1, self.mpc.nx).T
-
             s_opt = w_opt[-(self.mpc.ns*self.mpc.Np):].reshape(self.mpc.Np, self.mpc.ns).T
 
             # simulate the next time step

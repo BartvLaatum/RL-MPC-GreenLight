@@ -61,6 +61,7 @@ class RLExperimentManager:
         device="cpu",
         frame_stack=False,
         n_stack=1,
+        plant_state_env=None,
     ):
         """
         Initialize the ExperimentManager with the given parameters.
@@ -103,6 +104,7 @@ class RLExperimentManager:
         self.frame_stack = frame_stack
         self.n_stack = n_stack
         self.hp_tuning = hp_tuning
+        self.plant_state_env = plant_state_env
         self.models = {"ppo": PPO, "sac": SAC}
 
         self.model_class = self.models[self.algorithm.lower()]
@@ -150,6 +152,7 @@ class RLExperimentManager:
             vec_norm_kwargs=vec_norm_kwargs,
             frame_stack=self.frame_stack,
             n_stack=self.n_stack,
+            plant_state_env=self.plant_state_env,
         )
 
         self.env_base_params["training"] = False
@@ -164,6 +167,7 @@ class RLExperimentManager:
             eval_env=True,
             frame_stack=self.frame_stack,
             n_stack=self.n_stack,
+            plant_state_env=self.plant_state_env,
         )
 
 

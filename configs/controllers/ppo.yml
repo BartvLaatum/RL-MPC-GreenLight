@@ -20,7 +20,7 @@ TomatoEnv:              # using hyperparameter settings from RL framework...
                   optimizer_class: adam,
                   optimizer_kwargs: {amsgrad: True},
                   activation_fn: silu,
-                  log_std_init: np.log(1) # Results in policy standard deviation of 0.5 since exp(log(0.5)) = 0.5, where np.log(1) results in std of 1
+                  log_std_init: np.log(1), # Results in policy standard deviation of 0.5 since exp(log(0.5)) = 0.5, where np.log(1) results in std of 1
           }
 
   learning_rate: 8.75e-5

@@ -32,10 +32,12 @@ def main(args: argparse.Namespace):
 
     exp = MPCExperimentManager(
         mpc,
+        # n_days=1/288,
         n_days=env_params["season_length"],
-        location=env_params["location"],
-        growth_year=env_params["start_train_year"],
-        start_day=env_params["start_train_day"]
+        location=args.location,
+        growth_year=args.growth_year,
+        start_day=args.start_day,
+        plant_state_env=args.plant_state_env
     )
 
     mpc.define_nlp_multi()
@@ -49,6 +51,10 @@ if __name__ == "__main__":
     parser.add_argument("--project", type=str, default="GL-MPC-RL", help="Name of the project (in wandb)")
     parser.add_argument("--experiment_name", type=str, required=True, help="Name of the experiment")
     parser.add_argument("--horizon", type=int, default=1, help="Prediction horizon in hours")
+    parser.add_argument("--location", type=str, default="Netherlands", help="Location")
+    parser.add_argument("--growth_year", type=int, default=2023, help="Growth year")
+    parser.add_argument("--start_day", type=int, default=151, help="Start day")
+    parser.add_argument("--plant_state_env", action="store_true", help="Whether to use the plant state environment")
     args = parser.parse_args()
 
     main(args)

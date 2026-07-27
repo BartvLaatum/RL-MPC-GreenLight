@@ -11,7 +11,7 @@ GreenLightEnv:
   u_min: [0, 0, 0, 0, 0, 0]
   u_max: [1, 1, 1, 1, 1, 1]
   delta_u_max: 0.1                # max change rate in control inputs
-  pred_horizon: 0.5               # [days] number of future weather predictions
+  pred_horizon: 0.042               # [days] number of future weather predictions
   season_length: 1                # number of days to simulate
   start_train_year: 2023          # start year for training
   end_train_year: 2023            # end year for training
@@ -28,7 +28,7 @@ TomatoEnv:
     ControlObservations, 
     WeatherObservations,
     TimeObservations,
-    # WeatherForecastObservations
+    WeatherForecastObservations
   ]
 
   constraints:
@@ -51,4 +51,3 @@ TomatoEnv:
     fruit_price: 1.2            # €/kg
     dmfm: 0.06                  # dry matter fresh matter ratio
     pen_weights: [5.e-5, 5.e-3, 7.e-4]
-

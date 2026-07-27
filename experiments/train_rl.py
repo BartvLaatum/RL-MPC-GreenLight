@@ -1,11 +1,30 @@
 import argparse
+import json
+from typing import Dict, Optional
+
 from common.utils import load_env_params, load_model_hyperparams
 from experiments.rl_experiment_manager import RLExperimentManager
+
+
+def update_hyperparameters_from_dict(
+    hyperparameters: Dict[str, object],
+    updates: Optional[Dict[str, object]],
+) -> Dict[str, object]:
+    if not updates:
+        return hyperparameters
+    for key in ("batch_size", "learning_rate", "n_steps"):
+        if key in updates:
+            hyperparameters[key] = updates[key]
+    return hyperparameters
 
 def main(args: argparse.Namespace):
     env_config_path = f"configs/envs/"
     env_base_params, env_specific_params = load_env_params(args.env_id, env_config_path)
     hyperparameters = load_model_hyperparams(args.algorithm, args.env_id)
+    hyperparameters = update_hyperparameters_from_dict(
+        hyperparameters,
+        args.hp_updates,
+    )
     # Initialize the experiment manager
     experiment_manager = RLExperimentManager(
         env_id=args.env_id,
@@ -26,6 +45,7 @@ def main(args: argparse.Namespace):
         device=args.device,
         frame_stack=args.frame_stack,
         n_stack=args.n_stack,
+        plant_state_env=args.plant_state_env,
     )
 
     if args.hyperparameter_tuning:
@@ -52,6 +72,13 @@ if __name__ == "__main__":
     parser.add_argument("--save_model", default=True, action=argparse.BooleanOptionalAction, help="Whether to save the model")
     parser.add_argument("--save_env", default=True, action=argparse.BooleanOptionalAction, help="Whether to save the environment")
     parser.add_argument("--hyperparameter_tuning", default=False, action=argparse.BooleanOptionalAction, help="Perform hyperparameter tuning")
+    parser.add_argument("--plant_state_env", default=False, action=argparse.BooleanOptionalAction, help="Whether to use the plant state environment")
+    parser.add_argument(
+        "--hp_updates",
+        type=json.loads,
+        default=None,
+        help="JSON dict with batch_size, learning_rate, n_steps overrides",
+    )
     args = parser.parse_args()
 
     main(args)
