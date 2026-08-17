@@ -65,6 +65,8 @@ def main(args: argparse.Namespace):
         eval_env=eval_env,
         model=model,
         terminal_penalty=args.terminal_penalty,
+        load_norm_x=args.load_norm_x,
+        norm_x_path=os.path.join(load_path, "envs", args.model_name, "x_norm.npy"),
     )
 
     exp = RLMPCExperimentManager(
@@ -100,6 +102,7 @@ if __name__ == "__main__":
     parser.add_argument("--terminal_penalty", action=argparse.BooleanOptionalAction, help="Enable terminal constraint in MPC")
     parser.add_argument("--extend_ocp_region", action=argparse.BooleanOptionalAction, help="Extend OCP region")
     parser.add_argument("--normalize_x", action=argparse.BooleanOptionalAction, help="Normalize states")
+    parser.add_argument("--load_norm_x", action="store_true", help="Load rather than compute the state normalization vector")
     parser.add_argument("--frame_stack", action="store_true", help="Whether to use frame stacking")
     parser.add_argument("--n_stack", type=int, default=1, help="Number of frames to stack")
     parser.add_argument("--growth_year", type=int, default=2023, help="Growth year")
