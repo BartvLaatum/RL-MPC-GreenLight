@@ -41,12 +41,17 @@ def evaluate(model, env):
         episodic_obs[timestep] += env.unnormalize_obs(observations)[0, :]
 
     for timestep in range(1, N+1):
+        import time
+        start_time = time.time()
         actions, states = model.predict(
             observations,  # type: ignore[arg-type]
             state=states,
             episode_start=episode_starts,
             deterministic=True,
-    )
+        )
+        prediction_time = time.time() - start_time
+        # Optionally, store or print prediction_time for logging/profiling
+        print(f"Model prediction time: {prediction_time:.6f} seconds")
         observations, rewards, dones, infos = env.step(actions)
         episode_rewards[timestep-1] += rewards[0]
         # episodic_obs[timestep] += env.unnormalize_obs(observations)[0, :23]
@@ -128,4 +133,4 @@ if __name__ == "__main__":
 
     save_name = f"{args.model_name}-{args.location}-{args.growth_year}-{args.start_day}.csv"
     print("saving results to", save_name)
-    result.save(f"{save_dir}/{save_name}")
+    # result.save(f"{save_dir}/{save_name}")
