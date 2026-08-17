@@ -32,6 +32,8 @@ class RLMPC(MPC):
         model: BaseAlgorithm,
         normalize_x: bool = False,
         terminal_penalty: bool = False,
+        load_norm_x: bool = False,
+        norm_x_path: str | None = None,
     ) -> None:
         super().__init__(
             nx,
@@ -56,8 +58,12 @@ class RLMPC(MPC):
         self.normalize_x = normalize_x
 
         if self.normalize_x:
-            logs = self.unroll_actor(horizon=288+self.Np+1, freeze=False)
-            self.x_norm = logs["x"].mean(axis=1)
+            if load_norm_x:
+                self.x_norm = np.load(norm_x_path)
+            else:
+                logs = self.unroll_actor(horizon=288+self.Np+1, freeze=False)
+                self.x_norm = logs["x"].mean(axis=1)
+            print(f"x_norm: {self.x_norm.round(2)}")
 
         self.terminal_penalty_weight = 1e-5
 
