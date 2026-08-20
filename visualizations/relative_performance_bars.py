@@ -14,9 +14,10 @@ Usage:
         --model_name daily-glade-107 \
         --start_days 90 105 120 135 151 \
         --test_years 2011 2012 2019 2020 2023
-
 """
+
 import argparse
+import csv
 import warnings
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -607,6 +608,66 @@ def print_summary(
     
     print("=" * 90)
 
+
+def save_statistics(
+    average_statistics: Dict[str, Dict[str, Dict[str, float]]],
+    difference_statistics: Dict[str, Dict[str, Dict[str, float]]],
+    metrics: List[str],
+    output_path: Path,
+) -> None:
+    """Save the printed average and difference summaries as CSV."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = [
+        "summary",
+        "controller",
+        "metric",
+        "mean",
+        "ci_lower",
+        "ci_upper",
+        "std",
+        "n",
+    ]
+
+    with output_path.open("w", newline="") as file:
+        writer = csv.DictWriter(file, fieldnames=fieldnames)
+        writer.writeheader()
+
+        for controller in ["rlmpc", "rl", "mpc"]:
+            for metric in metrics:
+                writer.writerow(
+                    {
+                        "summary": "average",
+                        "controller": controller,
+                        "metric": metric,
+                        **average_statistics[controller][metric],
+                    }
+                )
+
+        for controller in ["rl", "mpc"]:
+            for metric in metrics:
+                writer.writerow(
+                    {
+                        "summary": "difference",
+                        "controller": f"rlmpc_vs_{controller}",
+                        "metric": metric,
+                        **difference_statistics[controller][metric],
+                    }
+                )
+
+        for controller in ["rl", "mpc"]:
+            for metric in metrics:
+                writer.writerow(
+                    {
+                        "summary": "relative_difference_percent",
+                        "controller": f"rlmpc_vs_{controller}",
+                        "metric": metric,
+                        **difference_statistics[f"{controller}_rel"][metric],
+                    }
+                )
+
+    print(f"Saved statistics to {output_path}")
+
+
 # ==============================================================================
 # Main Entry Point
 # ==============================================================================
@@ -730,6 +791,12 @@ def main():
     
     # Create plot
     output_path = Path(args.out_dir) / "relative_performance_bars"
+    save_statistics(
+        average_statistics=stats,
+        difference_statistics=statistics,
+        metrics=args.metrics,
+        output_path=output_path.with_suffix(".csv"),
+    )
     
     print(f"\nGenerating plot...")
     make_plot(
