@@ -1,7 +1,7 @@
 # Trajectory-Selection RL-MPC for Greenhouse Fruit Production
 
 <p align="center">
-  <img src="images/sketch-rl-mpc.svg" alt="Trajectory-selection RL-MPC" width="80%"/>
+  <img src="images/Sketch-Selection-RL-MPC.png" alt="Trajectory-selection RL-MPC" width="80%"/>
 </p>
 
 ## Introduction
