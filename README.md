@@ -1,5 +1,9 @@
 # Trajectory-Selection RL-MPC for Greenhouse Fruit Production
 
+<p align="center">
+  <img src="images/sketch-rl-mpc.svg" alt="Trajectory-selection RL-MPC" width="80%"/>
+</p>
+
 ## Introduction
 
 This repository contains the code used for the preprint **Improving greenhouse fruit-production control by integrating reinforcement learning into short-horizon model predictive control**.
