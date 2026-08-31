@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rl-mpc-gl"
+version = "0.1.0"
+description = "Trajectory-selection RL-MPC for greenhouse fruit production"
+requires-python = ">=3.11"
+
+[tool.setuptools.packages.find]
+include = ["common*", "controllers*", "environments*", "experiments*", "model*"]

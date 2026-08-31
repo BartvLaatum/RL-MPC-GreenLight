@@ -29,10 +29,11 @@ Before installing this project, ensure you have:
 
 1. Clone the repository and create a Python 3.11 environment.
 
-2. Install Python dependencies:
+2. Install Python dependencies and this repository:
 
 ```bash
 pip install -r requirements.txt
+pip install -e .
 ```
 
 3. Install **IPOPT** separately (not provided via `pip`):
@@ -53,13 +54,7 @@ linear_solver: "mumps"   # default in this repo is "ma57"
 
 Leave `linear_solver: "ma57"` only if MA57 is actually available on your machine. Using `"ma57"` without the library will make IPOPT fail at solve time.
 
-From the repository root, set the Python path when you run scripts:
-
-```bash
-export PYTHONPATH=$(pwd)
-```
-
-The provided shell scripts in `run_scripts/` already do this.
+Run scripts from the repository root so relative paths to `configs/` and `weather/` resolve.
 
 ## Project Structure
 

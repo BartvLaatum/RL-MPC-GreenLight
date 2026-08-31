@@ -4,5 +4,7 @@ figures/
 train_data/
 results/
 *__pycache__*
+*.egg-info/
+build/
 .vscode/
 *.png
