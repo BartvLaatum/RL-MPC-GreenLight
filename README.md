@@ -35,7 +35,7 @@ Before installing this project, ensure you have:
 pip install -r requirements.txt
 ```
 
-3. Install **IPOPT** separately (CasADi does not provide it via `pip`):
+3. Install **IPOPT** separately (not provided via `pip`):
 
 ```bash
 conda install -c conda-forge ipopt
